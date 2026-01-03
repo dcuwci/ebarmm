@@ -1,0 +1,92 @@
+# E-BARMM Infrastructure Only
+# PostgreSQL, Redis, MinIO - for development with manual backend/frontend
+
+version: '3.8'
+
+services:
+  # PostgreSQL + PostGIS
+  postgres:
+    image: postgis/postgis:15-3.4
+    container_name: ebarmm-postgres
+    environment:
+      POSTGRES_DB: ebarmm
+      POSTGRES_USER: ebarmm_app
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-DevPassword123}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../database:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - ebarmm-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ebarmm_app -d ebarmm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO (S3-compatible object storage)
+  minio:
+    image: minio/minio:latest
+    container_name: ebarmm-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    networks:
+      - ebarmm-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # Redis (for token blacklist)
+  redis:
+    image: redis:7-alpine
+    container_name: ebarmm-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - ebarmm-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO bucket setup (one-time initialization)
+  minio-setup:
+    image: minio/mc:latest
+    container_name: ebarmm-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - ebarmm-network
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb myminio/ebarmm-media --ignore-existing;
+      mc policy set download myminio/ebarmm-media;
+      echo 'MinIO bucket setup complete';
+      exit 0;
+      "
+
+networks:
+  ebarmm-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  minio-data:
+  redis-data:
