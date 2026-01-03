@@ -19,13 +19,39 @@ class User(Base):
 
     user_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     username = Column(String(100), unique=True, nullable=False, index=True)
+    email = Column(String(255), unique=True, nullable=True, index=True)
     password_hash = Column(Text, nullable=False)
     role = Column(String(30), nullable=False, index=True)
     deo_id = Column(Integer, ForeignKey("deo.deo_id"))
     region = Column(String(50))
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_login = Column(DateTime)
+
+    # Profile fields
+    first_name = Column(String(50), nullable=True)
+    last_name = Column(String(50), nullable=True)
+    phone_number = Column(String(20), nullable=True)
+
+    # Email verification (for future use)
+    is_verified = Column(Boolean, default=True)  # Default True since we skip email verification
+    verification_token = Column(String(255), unique=True, nullable=True)
+    token_expires_at = Column(DateTime, nullable=True)
+
+    # MFA fields
+    mfa_enabled = Column(Boolean, default=False)
+    mfa_secret = Column(String(255), nullable=True)
+    backup_codes = Column(Text, nullable=True)  # JSON array of one-time backup codes
+
+    # Password reset tracking
+    last_password_reset = Column(DateTime, nullable=True)
+    password_reset_count = Column(Integer, default=0)
+
+    # Soft delete
+    is_deleted = Column(Boolean, default=False, index=True)
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by = Column(UUID(as_uuid=True), nullable=True)
 
     # Relationships
     deo = relationship("DEO", back_populates="users")
@@ -33,6 +59,7 @@ class User(Base):
     progress_logs = relationship("ProjectProgressLog", back_populates="reporter")
     gis_features = relationship("GISFeature", back_populates="creator")
     media_assets = relationship("MediaAsset", back_populates="uploader")
+    groups = relationship("UserGroup", back_populates="user", cascade="all, delete-orphan")
 
     __table_args__ = (
         CheckConstraint(
@@ -252,3 +279,102 @@ class TokenBlacklist(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), index=True)
     expires_at = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# =============================================================================
+# Group-Based Access Control Models
+# =============================================================================
+
+class Group(Base):
+    """User groups for RBAC"""
+    __tablename__ = "groups"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), unique=True, nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    members = relationship("UserGroup", back_populates="group", cascade="all, delete-orphan")
+    access_rights = relationship("AccessRight", back_populates="group", cascade="all, delete-orphan")
+
+
+class UserGroup(Base):
+    """Many-to-many relationship between users and groups"""
+    __tablename__ = "user_groups"
+
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True)
+    group_id = Column(UUID(as_uuid=True), ForeignKey("groups.id", ondelete="CASCADE"), primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="groups")
+    group = relationship("Group", back_populates="members")
+
+    __table_args__ = (
+        Index('idx_user_groups_user_id', 'user_id'),
+        Index('idx_user_groups_group_id', 'group_id'),
+    )
+
+
+class AccessRight(Base):
+    """Resource permissions for groups"""
+    __tablename__ = "access_rights"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    resource = Column(String(50), nullable=False, index=True)
+    permissions = Column(JSONB, nullable=False)  # {"read": true, "create": false, "update": true, "delete": false}
+    group_id = Column(UUID(as_uuid=True), ForeignKey("groups.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    group = relationship("Group", back_populates="access_rights")
+
+    __table_args__ = (
+        UniqueConstraint("group_id", "resource", name="uq_group_resource"),
+    )
+
+
+# =============================================================================
+# Token Models
+# =============================================================================
+
+class RefreshToken(Base):
+    """Refresh tokens for JWT authentication"""
+    __tablename__ = "refresh_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    token = Column(String(255), unique=True, nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    is_revoked = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class MFASession(Base):
+    """Temporary MFA session tokens during login"""
+    __tablename__ = "mfa_sessions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_token = Column(String(255), unique=True, nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    is_used = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PasswordResetToken(Base):
+    """Password reset tokens"""
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    email = Column(String(255), nullable=False, index=True)
+    token = Column(String(255), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    used_at = Column(DateTime, nullable=True)

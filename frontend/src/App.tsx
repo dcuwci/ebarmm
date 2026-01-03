@@ -21,6 +21,13 @@ import ProjectForm from './routes/admin/ProjectForm'
 import ProjectDetail from './routes/admin/ProjectDetail'
 import ProgressReport from './routes/admin/ProgressReport'
 import GISEditor from './routes/admin/GISEditor'
+import Profile from './routes/admin/Profile'
+
+// Settings routes
+import UsersSettings from './routes/admin/settings/UsersSettings'
+import GroupsSettings from './routes/admin/settings/GroupsSettings'
+import AccessRightsSettings from './routes/admin/settings/AccessRightsSettings'
+import AuditLogs from './routes/admin/settings/AuditLogs'
 
 // Protected route wrapper
 import ProtectedRoute from './components/layout/ProtectedRoute'
@@ -58,6 +65,11 @@ function App() {
           <Route path="projects/:projectId/edit" element={<ProjectForm />} />
           <Route path="projects/:projectId/progress" element={<ProgressReport />} />
           <Route path="projects/:projectId/gis" element={<GISEditor />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="settings/users" element={<UsersSettings />} />
+          <Route path="settings/groups" element={<GroupsSettings />} />
+          <Route path="settings/access-rights" element={<AccessRightsSettings />} />
+          <Route path="settings/audit-logs" element={<AuditLogs />} />
         </Route>
 
         {/* 404 */}

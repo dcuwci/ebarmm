@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
+    # Refresh Tokens
+    REFRESH_TOKEN_ENABLED: bool = True
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+
+    # MFA Configuration
+    MFA_ENABLED: bool = True  # Feature toggle - enables MFA functionality
+    MFA_REQUIRED: bool = False  # If True, all users must setup MFA (set False for local dev)
+    MFA_ISSUER: str = "E-BARMM"
+
     # CORS
     CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000"]
 

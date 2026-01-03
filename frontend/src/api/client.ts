@@ -61,3 +61,6 @@ export function getErrorMessage(error: unknown): string {
   }
   return 'An unexpected error occurred'
 }
+
+// Default export for convenience
+export default apiClient

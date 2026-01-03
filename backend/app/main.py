@@ -14,7 +14,7 @@ import logging
 import time
 
 from .core.config import settings
-from .api import auth, projects, progress, gis, media, public, audit
+from .api import auth, projects, progress, gis, media, public, audit, users, groups, access_rights
 from .core.database import engine, Base
 
 # Configure logging
@@ -135,6 +135,9 @@ async def root():
 API_PREFIX = settings.API_V1_PREFIX
 
 app.include_router(auth.router, prefix=f"{API_PREFIX}/auth", tags=["Authentication"])
+app.include_router(users.router, prefix=f"{API_PREFIX}/users", tags=["Users"])
+app.include_router(groups.router, prefix=f"{API_PREFIX}/groups", tags=["Groups"])
+app.include_router(access_rights.router, prefix=f"{API_PREFIX}/access-rights", tags=["Access Rights"])
 app.include_router(projects.router, prefix=f"{API_PREFIX}/projects", tags=["Projects"])
 app.include_router(progress.router, prefix=f"{API_PREFIX}/progress", tags=["Progress"])
 app.include_router(gis.router, prefix=f"{API_PREFIX}/gis", tags=["GIS Features"])

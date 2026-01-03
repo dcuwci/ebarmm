@@ -15,13 +15,40 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE users (
     user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE,
     password_hash TEXT NOT NULL,
     role VARCHAR(30) NOT NULL CHECK (role IN ('public', 'deo_user', 'regional_admin', 'super_admin')),
     deo_id INT,
     region VARCHAR(50),
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
     last_login TIMESTAMP,
+
+    -- Profile fields
+    first_name VARCHAR(50),
+    last_name VARCHAR(50),
+    phone_number VARCHAR(20),
+
+    -- Email verification
+    is_verified BOOLEAN DEFAULT TRUE,
+    verification_token VARCHAR(255) UNIQUE,
+    token_expires_at TIMESTAMP,
+
+    -- MFA fields
+    mfa_enabled BOOLEAN DEFAULT FALSE,
+    mfa_secret VARCHAR(255),
+    backup_codes TEXT,
+
+    -- Password reset tracking
+    last_password_reset TIMESTAMP,
+    password_reset_count INT DEFAULT 0,
+
+    -- Soft delete
+    is_deleted BOOLEAN DEFAULT FALSE,
+    deleted_at TIMESTAMP,
+    deleted_by UUID,
+
     CONSTRAINT chk_deo_user_has_deo CHECK (
         (role = 'deo_user' AND deo_id IS NOT NULL) OR
         (role != 'deo_user')
@@ -29,8 +56,10 @@ CREATE TABLE users (
 );
 
 CREATE INDEX idx_users_username ON users(username);
+CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_users_deo_id ON users(deo_id);
+CREATE INDEX idx_users_is_deleted ON users(is_deleted);
 
 -- =============================================================================
 -- ORGANIZATIONAL STRUCTURE

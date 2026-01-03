@@ -21,15 +21,24 @@ import Avatar from '@mui/material/Avatar';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Tooltip from '@mui/material/Tooltip';
+import Collapse from '@mui/material/Collapse';
 import {
   Menu as MenuIcon,
   ChevronLeft,
+  ChevronDown,
+  ChevronRight,
   LayoutDashboard,
   FolderKanban,
   Map,
   LogOut,
   Sun,
   Moon,
+  Settings,
+  Users,
+  Shield,
+  Key,
+  History,
+  User,
 } from 'lucide-react';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
@@ -41,12 +50,26 @@ interface NavItem {
   label: string;
   icon: React.ReactNode;
   path: string;
+  children?: NavItem[];
+  roles?: string[];
 }
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
   { label: 'Projects', icon: <FolderKanban size={20} />, path: '/admin/projects' },
   { label: 'Map View', icon: <Map size={20} />, path: '/map' },
+  {
+    label: 'Settings',
+    icon: <Settings size={20} />,
+    path: '/admin/settings',
+    roles: ['super_admin', 'regional_admin'],
+    children: [
+      { label: 'Users', icon: <Users size={18} />, path: '/admin/settings/users' },
+      { label: 'Groups', icon: <Shield size={18} />, path: '/admin/settings/groups' },
+      { label: 'Access Rights', icon: <Key size={18} />, path: '/admin/settings/access-rights' },
+      { label: 'Audit Logs', icon: <History size={18} />, path: '/admin/settings/audit-logs' },
+    ],
+  },
 ];
 
 export default function AdminLayout() {
@@ -57,6 +80,7 @@ export default function AdminLayout() {
 
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleDrawerToggle = () => {
     setDrawerOpen(!drawerOpen);
@@ -76,12 +100,22 @@ export default function AdminLayout() {
     navigate('/login');
   };
 
+  const handleSettingsClick = () => {
+    if (drawerOpen) {
+      setSettingsOpen(!settingsOpen);
+    } else {
+      navigate('/admin/settings/users');
+    }
+  };
+
   const isActive = (path: string) => {
     if (path === '/admin') {
       return location.pathname === '/admin';
     }
     return location.pathname.startsWith(path);
   };
+
+  const canAccessSettings = user?.role === 'super_admin' || user?.role === 'regional_admin';
 
   const drawerWidth = drawerOpen ? DRAWER_WIDTH : DRAWER_WIDTH_COLLAPSED;
 
@@ -142,6 +176,12 @@ export default function AdminLayout() {
               </Typography>
             </Box>
             <Divider />
+            <MenuItem onClick={() => { handleProfileMenuClose(); navigate('/admin/profile'); }}>
+              <ListItemIcon>
+                <User size={18} />
+              </ListItemIcon>
+              <ListItemText>Profile</ListItemText>
+            </MenuItem>
             <MenuItem onClick={handleLogout}>
               <ListItemIcon>
                 <LogOut size={18} />
@@ -176,45 +216,130 @@ export default function AdminLayout() {
 
         <Box sx={{ overflow: 'auto', mt: 1 }}>
           <List>
-            {navItems.map((item) => (
-              <ListItem key={item.path} disablePadding sx={{ display: 'block' }}>
-                <ListItemButton
-                  onClick={() => navigate(item.path)}
-                  selected={isActive(item.path)}
-                  sx={{
-                    minHeight: 48,
-                    justifyContent: drawerOpen ? 'initial' : 'center',
-                    px: 2.5,
-                    mx: 1,
-                    borderRadius: 1,
-                    '&.Mui-selected': {
-                      bgcolor: 'primary.main',
-                      color: 'primary.contrastText',
-                      '&:hover': {
-                        bgcolor: 'primary.dark',
-                      },
-                      '& .MuiListItemIcon-root': {
-                        color: 'inherit',
-                      },
-                    },
-                  }}
-                >
-                  <ListItemIcon
+            {navItems.map((item) => {
+              // Skip Settings if user doesn't have access
+              if (item.roles && !item.roles.includes(user?.role || '')) {
+                return null;
+              }
+
+              // Handle items with children (Settings submenu)
+              if (item.children) {
+                return (
+                  <ListItem key={item.path} disablePadding sx={{ display: 'block' }}>
+                    <ListItemButton
+                      onClick={handleSettingsClick}
+                      selected={isActive(item.path)}
+                      sx={{
+                        minHeight: 48,
+                        justifyContent: drawerOpen ? 'initial' : 'center',
+                        px: 2.5,
+                        mx: 1,
+                        borderRadius: 1,
+                        '&.Mui-selected': {
+                          bgcolor: 'primary.main',
+                          color: 'primary.contrastText',
+                          '&:hover': {
+                            bgcolor: 'primary.dark',
+                          },
+                          '& .MuiListItemIcon-root': {
+                            color: 'inherit',
+                          },
+                        },
+                      }}
+                    >
+                      <ListItemIcon
+                        sx={{
+                          minWidth: 0,
+                          mr: drawerOpen ? 2 : 'auto',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        {item.icon}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={item.label}
+                        sx={{ opacity: drawerOpen ? 1 : 0 }}
+                      />
+                      {drawerOpen && (
+                        settingsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                      )}
+                    </ListItemButton>
+                    <Collapse in={settingsOpen && drawerOpen} timeout="auto" unmountOnExit>
+                      <List component="div" disablePadding>
+                        {item.children.map((child) => (
+                          <ListItemButton
+                            key={child.path}
+                            onClick={() => navigate(child.path)}
+                            selected={location.pathname === child.path}
+                            sx={{
+                              minHeight: 40,
+                              pl: 4,
+                              mx: 1,
+                              borderRadius: 1,
+                              '&.Mui-selected': {
+                                bgcolor: 'action.selected',
+                                '&:hover': {
+                                  bgcolor: 'action.hover',
+                                },
+                              },
+                            }}
+                          >
+                            <ListItemIcon sx={{ minWidth: 0, mr: 2 }}>
+                              {child.icon}
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={child.label}
+                              primaryTypographyProps={{ fontSize: '0.875rem' }}
+                            />
+                          </ListItemButton>
+                        ))}
+                      </List>
+                    </Collapse>
+                  </ListItem>
+                );
+              }
+
+              // Regular nav items
+              return (
+                <ListItem key={item.path} disablePadding sx={{ display: 'block' }}>
+                  <ListItemButton
+                    onClick={() => navigate(item.path)}
+                    selected={isActive(item.path)}
                     sx={{
-                      minWidth: 0,
-                      mr: drawerOpen ? 2 : 'auto',
-                      justifyContent: 'center',
+                      minHeight: 48,
+                      justifyContent: drawerOpen ? 'initial' : 'center',
+                      px: 2.5,
+                      mx: 1,
+                      borderRadius: 1,
+                      '&.Mui-selected': {
+                        bgcolor: 'primary.main',
+                        color: 'primary.contrastText',
+                        '&:hover': {
+                          bgcolor: 'primary.dark',
+                        },
+                        '& .MuiListItemIcon-root': {
+                          color: 'inherit',
+                        },
+                      },
                     }}
                   >
-                    {item.icon}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={item.label}
-                    sx={{ opacity: drawerOpen ? 1 : 0 }}
-                  />
-                </ListItemButton>
-              </ListItem>
-            ))}
+                    <ListItemIcon
+                      sx={{
+                        minWidth: 0,
+                        mr: drawerOpen ? 2 : 'auto',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {item.icon}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={item.label}
+                      sx={{ opacity: drawerOpen ? 1 : 0 }}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
           </List>
         </Box>
       </Drawer>

@@ -1,6 +1,6 @@
 /**
  * Login Page
- * MUI-based authentication form
+ * MUI-based authentication form with MFA support
  */
 
 import React, { useState } from 'react';
@@ -13,7 +13,8 @@ import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import { Button } from '../../components/mui';
 import { useAuthStore } from '../../stores/authStore';
-import { apiClient } from '../../api/client';
+import { login as loginApi, verifyMfa } from '../../api/auth';
+import MFAVerifyDialog from '../../components/auth/MFAVerifyDialog';
 
 interface LoginFormData {
   username: string;
@@ -38,6 +39,11 @@ export default function Login() {
 
   const [errors, setErrors] = useState<LoginFormErrors>({});
   const [loading, setLoading] = useState(false);
+
+  // MFA state
+  const [mfaDialogOpen, setMfaDialogOpen] = useState(false);
+  const [mfaSessionToken, setMfaSessionToken] = useState<string | null>(null);
+  const [mfaError, setMfaError] = useState<string | null>(null);
 
   const validateForm = (): boolean => {
     const newErrors: LoginFormErrors = {};
@@ -78,25 +84,19 @@ export default function Login() {
     setErrors({});
 
     try {
-      // OAuth2 compatible login using form data
-      const formBody = new URLSearchParams();
-      formBody.append('username', formData.username);
-      formBody.append('password', formData.password);
+      const response = await loginApi(formData.username, formData.password);
 
-      const response = await apiClient.post('/auth/login', formBody, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-
-      const { access_token, user } = response.data;
-
-      // Store token and user in auth store
-      login(access_token, user);
-
-      // Redirect to intended page or dashboard
-      const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/admin';
-      navigate(from, { replace: true });
+      // Check if MFA is required
+      if (response.mfa_required && response.mfa_session_token) {
+        setMfaSessionToken(response.mfa_session_token);
+        setMfaDialogOpen(true);
+        setMfaError(null);
+      } else if (response.access_token && response.user) {
+        // No MFA required, complete login
+        login(response.access_token, response.user, response.refresh_token);
+        const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/admin';
+        navigate(from, { replace: true });
+      }
     } catch (error: unknown) {
       console.error('Login error:', error);
 
@@ -121,6 +121,26 @@ export default function Login() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle MFA verification
+  const handleMfaVerify = async (code: string) => {
+    if (!mfaSessionToken) return;
+
+    try {
+      const response = await verifyMfa(code, mfaSessionToken);
+
+      if (response.access_token && response.user) {
+        login(response.access_token, response.user, response.refresh_token);
+        setMfaDialogOpen(false);
+        const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/admin';
+        navigate(from, { replace: true });
+      }
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { detail?: string } } };
+      setMfaError(axiosError.response?.data?.detail || 'Invalid verification code');
+      throw error; // Let the dialog handle the error state
     }
   };
 
@@ -256,6 +276,18 @@ export default function Login() {
           </Paper>
         )}
       </Box>
+
+      {/* MFA Verification Dialog */}
+      <MFAVerifyDialog
+        open={mfaDialogOpen}
+        onClose={() => {
+          setMfaDialogOpen(false);
+          setMfaSessionToken(null);
+          setMfaError(null);
+        }}
+        onVerify={handleMfaVerify}
+        error={mfaError}
+      />
     </Box>
   );
 }

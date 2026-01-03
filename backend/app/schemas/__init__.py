@@ -21,13 +21,64 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "Bearer"
     expires_in: int
+    refresh_token: Optional[str] = None
     user: UserResponse
+
+
+class TokenRefreshRequest(BaseModel):
+    """Refresh token request"""
+    refresh_token: str
 
 
 class LoginRequest(BaseModel):
     """Login credentials"""
     username: str
     password: str
+
+
+class LoginResponse(BaseModel):
+    """Login response - may include MFA challenge"""
+    access_token: Optional[str] = None
+    token_type: str = "Bearer"
+    expires_in: Optional[int] = None
+    refresh_token: Optional[str] = None
+    user: Optional[UserResponse] = None
+    mfa_required: bool = False
+    mfa_session_token: Optional[str] = None
+
+
+# =============================================================================
+# MFA
+# =============================================================================
+
+class MFASetupResponse(BaseModel):
+    """MFA setup response with QR code and backup codes"""
+    secret: str
+    qr_code: str  # Base64-encoded PNG data URI
+    backup_codes: List[str]
+    issuer: str
+
+
+class MFAVerifyRequest(BaseModel):
+    """MFA verification request"""
+    code: str = Field(..., min_length=6, max_length=8)
+    mfa_session_token: Optional[str] = None  # For login flow
+
+
+class MFAVerifySetupRequest(BaseModel):
+    """MFA setup verification request"""
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class MFADisableRequest(BaseModel):
+    """MFA disable request - requires current code"""
+    code: str = Field(..., min_length=6, max_length=8)
+
+
+class MFAStatusResponse(BaseModel):
+    """MFA status for current user"""
+    mfa_enabled: bool
+    backup_codes_remaining: int
 
 
 # =============================================================================
@@ -63,15 +114,59 @@ class UserResponse(BaseModel):
     """User response"""
     user_id: UUID
     username: str
+    email: Optional[str] = None
     role: str
     deo_id: Optional[int]
     region: Optional[str]
     is_active: bool
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    mfa_enabled: bool = False
     created_at: datetime
-    last_login: Optional[datetime]
+    updated_at: Optional[datetime] = None
+    last_login: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+class UserAdminCreate(BaseModel):
+    """Admin user creation request"""
+    username: constr(min_length=3, max_length=100)
+    email: Optional[str] = None
+    password: constr(min_length=8)
+    role: str = Field(..., pattern=r'^(public|deo_user|regional_admin|super_admin)$')
+    deo_id: Optional[int] = None
+    region: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    group_ids: Optional[List[UUID]] = None  # Assign to groups on creation
+
+
+class UserAdminUpdate(BaseModel):
+    """Admin user update request"""
+    email: Optional[str] = None
+    role: Optional[str] = Field(None, pattern=r'^(public|deo_user|regional_admin|super_admin)$')
+    deo_id: Optional[int] = None
+    region: Optional[str] = None
+    is_active: Optional[bool] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone_number: Optional[str] = None
+
+
+class UserListResponse(BaseModel):
+    """Paginated user list"""
+    total: int
+    items: List[UserResponse]
+
+
+class PasswordChangeRequest(BaseModel):
+    """Password change request"""
+    current_password: Optional[str] = None  # Required for self-change
+    new_password: constr(min_length=8)
 
 
 # =============================================================================
@@ -335,6 +430,115 @@ class AuditLogResponse(BaseModel):
 
 
 # =============================================================================
+# GROUPS
+# =============================================================================
+
+class GroupBase(BaseModel):
+    """Base group fields"""
+    name: constr(min_length=1, max_length=100)
+    description: Optional[str] = None
+    is_active: bool = True
+
+
+class GroupCreate(GroupBase):
+    """Group creation request"""
+    pass
+
+
+class GroupUpdate(BaseModel):
+    """Group update request"""
+    name: Optional[constr(min_length=1, max_length=100)] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class GroupResponse(GroupBase):
+    """Group response"""
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+    member_count: Optional[int] = 0
+
+    class Config:
+        from_attributes = True
+
+
+class GroupListResponse(BaseModel):
+    """Paginated group list"""
+    total: int
+    items: List[GroupResponse]
+
+
+class GroupMemberResponse(BaseModel):
+    """Group member response"""
+    user_id: UUID
+    username: str
+    email: Optional[str]
+    first_name: Optional[str]
+    last_name: Optional[str]
+    role: str
+    joined_at: datetime
+
+
+class GroupMemberAdd(BaseModel):
+    """Add member to group request"""
+    user_id: UUID
+
+
+# =============================================================================
+# ACCESS RIGHTS
+# =============================================================================
+
+class PermissionsDict(BaseModel):
+    """Permission flags for a resource"""
+    create: bool = False
+    read: bool = False
+    update: bool = False
+    delete: bool = False
+
+
+class AccessRightBase(BaseModel):
+    """Base access right fields"""
+    resource: str
+    permissions: Dict[str, bool]
+
+
+class AccessRightCreate(AccessRightBase):
+    """Access right creation request"""
+    group_id: UUID
+
+
+class AccessRightUpdate(BaseModel):
+    """Access right update request"""
+    permissions: Dict[str, bool]
+
+
+class AccessRightResponse(AccessRightBase):
+    """Access right response"""
+    id: UUID
+    group_id: UUID
+    group_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AccessRightListResponse(BaseModel):
+    """Paginated access right list"""
+    total: int
+    items: List[AccessRightResponse]
+
+
+class UserPermissionsResponse(BaseModel):
+    """All permissions for a user"""
+    user_id: UUID
+    permissions: Dict[str, Dict[str, bool]]
+    groups: List[GroupResponse]
+
+
+# =============================================================================
 # ERROR RESPONSE
 # =============================================================================
 
@@ -352,5 +556,10 @@ class ErrorResponse(BaseModel):
 # MODEL REBUILDS (for forward references in Pydantic v2)
 # =============================================================================
 
-# Rebuild Token model after UserResponse is defined
+# Rebuild models after all dependencies are defined
 Token.model_rebuild()
+LoginResponse.model_rebuild()
+UserListResponse.model_rebuild()
+GroupListResponse.model_rebuild()
+AccessRightListResponse.model_rebuild()
+UserPermissionsResponse.model_rebuild()
