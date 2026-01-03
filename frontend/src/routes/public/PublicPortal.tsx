@@ -1,9 +1,40 @@
-import React from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { StatCard, Card, CardHeader, LoadingSpinner, EmptyState, Table, Pagination, Button } from '../../components/common';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Grid from '@mui/material/Grid';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
+import TablePagination from '@mui/material/TablePagination';
+import TextField from '@mui/material/TextField';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
+import FormControl from '@mui/material/FormControl';
+import InputLabel from '@mui/material/InputLabel';
+import Chip from '@mui/material/Chip';
+import LinearProgress from '@mui/material/LinearProgress';
+import Skeleton from '@mui/material/Skeleton';
+import Paper from '@mui/material/Paper';
+import Button from '@mui/material/Button';
+import InputAdornment from '@mui/material/InputAdornment';
+import { useTheme } from '@mui/material/styles';
+import {
+  Search,
+  Building2,
+  DollarSign,
+  TrendingUp,
+  Zap,
+  ArrowLeft,
+  MapPin,
+} from 'lucide-react';
 import { apiClient } from '../../api/client';
-import type { Column } from '../../components/common';
 
 interface PublicStats {
   total_projects: number;
@@ -35,10 +66,11 @@ interface ProjectsResponse {
 
 export default function PublicPortal() {
   const navigate = useNavigate();
-  const [currentPage, setCurrentPage] = React.useState(1);
-  const [searchTerm, setSearchTerm] = React.useState('');
-  const [statusFilter, setStatusFilter] = React.useState('');
-  const itemsPerPage = 10;
+  const theme = useTheme();
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   // Fetch statistics
   const { data: stats, isLoading: statsLoading } = useQuery<PublicStats>({
@@ -46,16 +78,16 @@ export default function PublicPortal() {
     queryFn: async () => {
       const response = await apiClient.get('/public/stats');
       return response.data;
-    }
+    },
   });
 
   // Fetch projects
   const { data: projects, isLoading: projectsLoading } = useQuery<ProjectsResponse>({
-    queryKey: ['publicProjects', currentPage, searchTerm, statusFilter],
+    queryKey: ['publicProjects', page, rowsPerPage, searchTerm, statusFilter],
     queryFn: async () => {
       const params = new URLSearchParams({
-        limit: itemsPerPage.toString(),
-        offset: ((currentPage - 1) * itemsPerPage).toString()
+        limit: rowsPerPage.toString(),
+        offset: (page * rowsPerPage).toString(),
       });
 
       if (searchTerm) params.append('search', searchTerm);
@@ -63,7 +95,7 @@ export default function PublicPortal() {
 
       const response = await apiClient.get(`/public/projects?${params}`);
       return response.data;
-    }
+    },
   });
 
   const formatCurrency = (value: number) => {
@@ -71,7 +103,7 @@ export default function PublicPortal() {
       style: 'currency',
       currency: 'PHP',
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      maximumFractionDigits: 0,
     }).format(value);
   };
 
@@ -80,240 +112,343 @@ export default function PublicPortal() {
   };
 
   const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      planning: 'bg-gray-100 text-gray-800',
-      ongoing: 'bg-blue-100 text-blue-800',
-      completed: 'bg-green-100 text-green-800',
-      suspended: 'bg-yellow-100 text-yellow-800'
+    const colors: Record<string, 'default' | 'primary' | 'success' | 'warning' | 'error'> = {
+      planning: 'default',
+      ongoing: 'primary',
+      completed: 'success',
+      suspended: 'warning',
     };
-    return colors[status] || 'bg-gray-100 text-gray-800';
+    return colors[status] || 'default';
   };
 
-  const columns: Column<PublicProject>[] = [
+  const handleChangePage = (_: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  const statCards = [
     {
-      key: 'project_title',
-      header: 'Project Title',
-      render: (row) => (
-        <div>
-          <p className="font-medium text-gray-900">{row.project_title}</p>
-          <p className="text-xs text-gray-500">{row.location}</p>
-        </div>
-      )
+      title: 'Total Projects',
+      value: stats?.total_projects.toLocaleString() || '0',
+      icon: Building2,
+      color: theme.palette.primary.main,
     },
     {
-      key: 'deo_name',
-      header: 'DEO',
-      render: (row) => (
-        <span className="text-sm text-gray-700">{row.deo_name}</span>
-      )
+      title: 'Total Investment',
+      value: stats ? formatCurrency(stats.total_cost) : '₱0',
+      icon: DollarSign,
+      color: theme.palette.success.main,
     },
     {
-      key: 'project_cost',
-      header: 'Cost',
-      align: 'right',
-      render: (row) => (
-        <span className="font-medium">{formatCurrency(row.project_cost)}</span>
-      )
+      title: 'Average Completion',
+      value: stats ? formatPercent(stats.avg_completion) : '0%',
+      icon: TrendingUp,
+      color: theme.palette.info.main,
     },
     {
-      key: 'current_progress',
-      header: 'Progress',
-      align: 'center',
-      render: (row) => (
-        <div className="flex items-center">
-          <div className="w-full bg-gray-200 rounded-full h-2 mr-2">
-            <div
-              className="bg-blue-600 h-2 rounded-full"
-              style={{ width: `${row.current_progress}%` }}
-            />
-          </div>
-          <span className="text-sm font-medium">{formatPercent(row.current_progress)}</span>
-        </div>
-      )
+      title: 'Ongoing Projects',
+      value: stats?.by_status?.ongoing?.toString() || '0',
+      icon: Zap,
+      color: theme.palette.warning.main,
     },
-    {
-      key: 'status',
-      header: 'Status',
-      align: 'center',
-      render: (row) => (
-        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(row.status)}`}>
-          {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
-        </span>
-      )
-    }
   ];
 
-  const totalPages = projects ? Math.ceil(projects.total / itemsPerPage) : 1;
-
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* Hero Section */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <h1 className="text-4xl font-bold mb-4">
-            E-BARMM Transparency Portal
-          </h1>
-          <p className="text-xl text-blue-100 mb-8">
+      <Box
+        sx={{
+          background: `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 100%)`,
+          color: 'white',
+          py: { xs: 6, md: 8 },
+          px: { xs: 2, md: 4 },
+        }}
+      >
+        <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
+          <Button
+            startIcon={<ArrowLeft size={18} />}
+            onClick={() => navigate('/')}
+            sx={{
+              color: 'rgba(255,255,255,0.8)',
+              mb: 3,
+              '&:hover': { color: 'white', bgcolor: 'rgba(255,255,255,0.1)' },
+            }}
+          >
+            Back to Home
+          </Button>
+          <Typography variant="h3" fontWeight={700} gutterBottom>
+            Transparency Portal
+          </Typography>
+          <Typography variant="h6" sx={{ opacity: 0.9, maxWidth: 600 }}>
             Track infrastructure projects across the Bangsamoro Autonomous Region in Muslim Mindanao
-          </p>
-          <div className="flex gap-4">
-            <Button
-              variant="secondary"
-              onClick={() => navigate('/map')}
-            >
-              View Map
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => navigate('/login')}
-              className="text-white border-white hover:bg-white hover:text-blue-600"
-            >
-              Admin Login
-            </Button>
-          </div>
-        </div>
-      </div>
+          </Typography>
+        </Box>
+      </Box>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <Box sx={{ maxWidth: 1200, mx: 'auto', px: { xs: 2, md: 4 }, py: 4 }}>
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {statsLoading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <Card key={i} className="h-32 animate-pulse bg-gray-100"><div /></Card>
-            ))
-          ) : stats ? (
-            <>
-              <StatCard
-                title="Total Projects"
-                value={stats.total_projects.toLocaleString()}
-                icon={
-                  <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                }
-              />
-              <StatCard
-                title="Total Investment"
-                value={formatCurrency(stats.total_cost)}
-                icon={
-                  <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                }
-              />
-              <StatCard
-                title="Average Completion"
-                value={formatPercent(stats.avg_completion)}
-                icon={
-                  <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                }
-              />
-              <StatCard
-                title="Ongoing Projects"
-                value={stats.by_status.ongoing || 0}
-                icon={
-                  <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                }
-              />
-            </>
-          ) : null}
-        </div>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          {statCards.map((stat, index) => (
+            <Grid item xs={12} sm={6} md={3} key={index}>
+              {statsLoading ? (
+                <Skeleton variant="rounded" height={120} />
+              ) : (
+                <Card elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                      <Box>
+                        <Typography variant="body2" color="text.secondary" gutterBottom>
+                          {stat.title}
+                        </Typography>
+                        <Typography variant="h5" fontWeight={600}>
+                          {stat.value}
+                        </Typography>
+                      </Box>
+                      <Box
+                        sx={{
+                          p: 1,
+                          borderRadius: 2,
+                          bgcolor: `${stat.color}15`,
+                          color: stat.color,
+                        }}
+                      >
+                        <stat.icon size={24} />
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              )}
+            </Grid>
+          ))}
+        </Grid>
 
         {/* Projects by Province */}
-        {stats && (
-          <Card className="mb-8">
-            <CardHeader title="Projects by Province" />
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {Object.entries(stats.by_province).map(([province, count]) => (
-                <div key={province} className="text-center p-4 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">{count}</p>
-                  <p className="text-sm text-gray-600 mt-1">{province}</p>
-                </div>
-              ))}
-            </div>
+        {stats && Object.keys(stats.by_province).length > 0 && (
+          <Card elevation={0} sx={{ border: 1, borderColor: 'divider', mb: 4 }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight={600} gutterBottom>
+                Projects by Province
+              </Typography>
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                {Object.entries(stats.by_province).map(([province, count]) => (
+                  <Grid item xs={6} sm={4} md={2} key={province}>
+                    <Box
+                      sx={{
+                        textAlign: 'center',
+                        p: 2,
+                        borderRadius: 2,
+                        bgcolor: 'action.hover',
+                      }}
+                    >
+                      <Typography variant="h4" fontWeight={700} color="primary.main">
+                        {count}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {province}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+            </CardContent>
           </Card>
         )}
 
         {/* Projects Table */}
-        <Card>
-          <CardHeader
-            title="Infrastructure Projects"
-            subtitle={projects ? `${projects.total} total projects` : undefined}
-          />
+        <Card elevation={0} sx={{ border: 1, borderColor: 'divider' }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+              <Box>
+                <Typography variant="h6" fontWeight={600}>
+                  Infrastructure Projects
+                </Typography>
+                {projects && (
+                  <Typography variant="body2" color="text.secondary">
+                    {projects.total} total projects
+                  </Typography>
+                )}
+              </Box>
+            </Box>
 
-          {/* Filters */}
-          <div className="mb-6 flex gap-4">
-            <input
-              type="text"
-              placeholder="Search projects..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Status</option>
-              <option value="planning">Planning</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-              <option value="suspended">Suspended</option>
-            </select>
-          </div>
+            {/* Filters */}
+            <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+              <TextField
+                placeholder="Search projects..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setPage(0);
+                }}
+                size="small"
+                sx={{ minWidth: 300, flex: 1 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search size={18} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <FormControl size="small" sx={{ minWidth: 150 }}>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={statusFilter}
+                  label="Status"
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setPage(0);
+                  }}
+                >
+                  <MenuItem value="">All Status</MenuItem>
+                  <MenuItem value="planning">Planning</MenuItem>
+                  <MenuItem value="ongoing">Ongoing</MenuItem>
+                  <MenuItem value="completed">Completed</MenuItem>
+                  <MenuItem value="suspended">Suspended</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
 
-          {projectsLoading ? (
-            <div className="flex justify-center py-12">
-              <LoadingSpinner size="lg" className="text-blue-600" />
-            </div>
-          ) : projects && projects.items.length > 0 ? (
-            <>
-              <Table
-                columns={columns}
-                data={projects.items}
-                rowKey={(row) => row.project_id}
-                onRowClick={(row) => navigate(`/projects/${row.project_id}`)}
+            {/* Table */}
+            <TableContainer component={Paper} variant="outlined">
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'action.hover' }}>
+                    <TableCell sx={{ fontWeight: 600 }}>Project</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>DEO</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }} align="right">
+                      Cost
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Progress</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }} align="center">
+                      Status
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {projectsLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell>
+                          <Skeleton />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton />
+                        </TableCell>
+                        <TableCell>
+                          <Skeleton />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : projects && projects.items.length > 0 ? (
+                    projects.items.map((project) => (
+                      <TableRow
+                        key={project.project_id}
+                        hover
+                        onClick={() => navigate(`/projects/${project.project_id}`)}
+                        sx={{ cursor: 'pointer' }}
+                      >
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={500}>
+                            {project.project_title}
+                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                            <MapPin size={12} />
+                            <Typography variant="caption" color="text.secondary">
+                              {project.location}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">{project.deo_name}</Typography>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" fontWeight={500}>
+                            {formatCurrency(project.project_cost)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <LinearProgress
+                              variant="determinate"
+                              value={project.current_progress}
+                              sx={{ flex: 1, height: 8, borderRadius: 4 }}
+                            />
+                            <Typography variant="body2" fontWeight={500} sx={{ minWidth: 45 }}>
+                              {formatPercent(project.current_progress)}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell align="center">
+                          <Chip
+                            label={project.status.charAt(0).toUpperCase() + project.status.slice(1)}
+                            color={getStatusColor(project.status)}
+                            size="small"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={5} align="center" sx={{ py: 8 }}>
+                        <Typography color="text.secondary">
+                          {searchTerm || statusFilter
+                            ? 'No projects found. Try adjusting your filters.'
+                            : 'No projects available.'}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {/* Pagination */}
+            {projects && projects.total > 0 && (
+              <TablePagination
+                component="div"
+                count={projects.total}
+                page={page}
+                onPageChange={handleChangePage}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                rowsPerPageOptions={[5, 10, 25, 50]}
               />
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-                totalItems={projects.total}
-                itemsPerPage={itemsPerPage}
-              />
-            </>
-          ) : (
-            <EmptyState
-              title="No projects found"
-              description={searchTerm || statusFilter ? "Try adjusting your filters" : "No projects available at this time"}
-            />
-          )}
+            )}
+          </CardContent>
         </Card>
-      </div>
+      </Box>
 
       {/* Footer */}
-      <footer className="bg-gray-800 text-white mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">
-            <p className="text-lg font-semibold mb-2">Ministry of Public Works - BARMM</p>
-            <p className="text-gray-400">Bangsamoro Autonomous Region in Muslim Mindanao</p>
-            <p className="text-gray-400 text-sm mt-4">
-              &copy; {new Date().getFullYear()} E-BARMM. All rights reserved.
-            </p>
-          </div>
-        </div>
-      </footer>
-    </div>
+      <Box
+        component="footer"
+        sx={{
+          bgcolor: 'grey.900',
+          color: 'white',
+          py: 4,
+          mt: 8,
+          textAlign: 'center',
+        }}
+      >
+        <Typography variant="body1" fontWeight={600} gutterBottom>
+          Ministry of Public Works - BARMM
+        </Typography>
+        <Typography variant="body2" color="grey.400">
+          Bangsamoro Autonomous Region in Muslim Mindanao
+        </Typography>
+        <Typography variant="caption" color="grey.500" sx={{ mt: 2, display: 'block' }}>
+          © {new Date().getFullYear()} E-BARMM. All rights reserved.
+        </Typography>
+      </Box>
+    </Box>
   );
 }

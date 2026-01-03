@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -17,7 +18,8 @@ import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
 import LinearProgress from '@mui/material/LinearProgress';
-import { Search, X, MapPin } from 'lucide-react';
+import Tooltip from '@mui/material/Tooltip';
+import { Search, X, MapPin, Home } from 'lucide-react';
 import { LeafletMap } from '../../components/map/LeafletMap';
 import { LoadingSpinner } from '../../components/mui';
 import { apiClient } from '../../api/client';
@@ -46,6 +48,7 @@ const STATUS_COLORS: Record<string, 'default' | 'primary' | 'success' | 'warning
 };
 
 export default function PublicMap() {
+  const navigate = useNavigate();
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>();
   const [searchTerm, setSearchTerm] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -211,22 +214,53 @@ export default function PublicMap() {
 
       {/* Map */}
       <Box sx={{ flex: 1, position: 'relative' }}>
-        {!sidebarOpen && (
-          <IconButton
-            onClick={() => setSidebarOpen(true)}
-            sx={{
-              position: 'absolute',
-              top: 10,
-              left: 10,
-              zIndex: 1000,
-              bgcolor: 'background.paper',
-              boxShadow: 2,
-              '&:hover': { bgcolor: 'background.paper' },
-            }}
-          >
-            <Search size={20} />
-          </IconButton>
-        )}
+        {/* Top controls */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 10,
+            left: 10,
+            right: 10,
+            zIndex: 1100,
+            display: 'flex',
+            justifyContent: 'space-between',
+            pointerEvents: 'none',
+          }}
+        >
+          {/* Left side - Sidebar toggle */}
+          <Box sx={{ pointerEvents: 'auto' }}>
+            {!sidebarOpen && (
+              <Tooltip title="Show projects">
+                <IconButton
+                  onClick={() => setSidebarOpen(true)}
+                  sx={{
+                    bgcolor: 'background.paper',
+                    boxShadow: 2,
+                    '&:hover': { bgcolor: 'background.paper' },
+                  }}
+                >
+                  <Search size={20} />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+
+          {/* Right side - Home button (offset to not overlap with theme toggle in LeafletMap) */}
+          <Box sx={{ pointerEvents: 'auto', mr: 5 }}>
+            <Tooltip title="Back to Home">
+              <IconButton
+                onClick={() => navigate('/')}
+                sx={{
+                  bgcolor: 'background.paper',
+                  boxShadow: 2,
+                  '&:hover': { bgcolor: 'background.paper' },
+                }}
+              >
+                <Home size={20} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
 
         <LeafletMap
           projects={projectsWithGeometry}

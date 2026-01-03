@@ -28,7 +28,8 @@ import {
   deleteGISFeature,
 } from '../../api/gis';
 import { geojsonToWKT, wktToGeoJSON, getGeometryType } from '../../utils/geometry';
-import type { GeometryType } from '../../types/gis';
+import type { FeatureType } from '../../types/gis';
+import { geometryTypeToFeatureType } from '../../types/gis';
 
 interface GISEditorProps {
   projectId: string;
@@ -44,7 +45,7 @@ export default function GISEditor({ projectId }: GISEditorProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [selectedFeatureId, setSelectedFeatureId] = useState<number | null>(null);
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false,
@@ -60,7 +61,7 @@ export default function GISEditor({ projectId }: GISEditorProps) {
 
   // Create feature mutation
   const createMutation = useMutation({
-    mutationFn: (feature: { feature_type: GeometryType; geometry: GeoJSON.Geometry; properties?: Record<string, unknown> }) =>
+    mutationFn: (feature: { feature_type: FeatureType; geometry: GeoJSON.Geometry; attributes?: Record<string, unknown> }) =>
       createGISFeature(projectId, feature),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['gis-features', projectId] });
@@ -74,7 +75,7 @@ export default function GISEditor({ projectId }: GISEditorProps) {
 
   // Update feature mutation
   const updateMutation = useMutation({
-    mutationFn: ({ featureId, updates }: { featureId: number; updates: { geometry?: GeoJSON.Geometry; properties?: Record<string, unknown> } }) =>
+    mutationFn: ({ featureId, updates }: { featureId: string; updates: { geometry?: GeoJSON.Geometry; attributes?: Record<string, unknown> } }) =>
       updateGISFeature(projectId, featureId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['gis-features', projectId] });
@@ -89,7 +90,7 @@ export default function GISEditor({ projectId }: GISEditorProps) {
 
   // Delete feature mutation
   const deleteMutation = useMutation({
-    mutationFn: (featureId: number) => deleteGISFeature(projectId, featureId),
+    mutationFn: (featureId: string) => deleteGISFeature(projectId, featureId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['gis-features', projectId] });
       setSnackbar({ open: true, message: 'Feature deleted successfully', severity: 'success' });
@@ -123,11 +124,14 @@ export default function GISEditor({ projectId }: GISEditorProps) {
       return;
     }
 
-    const featureType = getGeometryType(geometry);
-    if (!featureType) {
+    const geometryType = getGeometryType(geometry);
+    if (!geometryType) {
       setSnackbar({ open: true, message: 'Unsupported geometry type', severity: 'error' });
       return;
     }
+
+    // Convert geometry type to infrastructure feature type
+    const featureType = geometryTypeToFeatureType(geometryType);
 
     if (selectedFeatureId) {
       // Update existing feature
@@ -140,7 +144,7 @@ export default function GISEditor({ projectId }: GISEditorProps) {
       createMutation.mutate({
         feature_type: featureType,
         geometry,
-        properties: {},
+        attributes: {},
       });
     }
   };
@@ -152,20 +156,22 @@ export default function GISEditor({ projectId }: GISEditorProps) {
   };
 
   // Handle delete feature
-  const handleDelete = (featureId: number) => {
+  const handleDelete = (featureId: string) => {
     if (window.confirm('Are you sure you want to delete this feature?')) {
       deleteMutation.mutate(featureId);
     }
   };
 
-  // Get icon for geometry type
-  const getGeometryIcon = (type: GeometryType) => {
+  // Get icon for feature type
+  const getFeatureIcon = (type: FeatureType) => {
     switch (type) {
-      case 'Point':
+      case 'facility':
         return <MapPin size={18} />;
-      case 'LineString':
+      case 'road':
+      case 'bridge':
+      case 'drainage':
         return <Minus size={18} />;
-      case 'Polygon':
+      case 'building':
         return <Pentagon size={18} />;
       default:
         return <MapPin size={18} />;
@@ -276,13 +282,13 @@ export default function GISEditor({ projectId }: GISEditorProps) {
                     }}
                   >
                     <ListItemIcon sx={{ minWidth: 36 }}>
-                      {getGeometryIcon(feature.feature_type)}
+                      {getFeatureIcon(feature.feature_type)}
                     </ListItemIcon>
                     <ListItemText
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography variant="body2" fontWeight={500}>
-                            Feature #{feature.feature_id}
+                            Feature {feature.feature_id.slice(0, 8)}
                           </Typography>
                           <Chip
                             label={feature.feature_type}

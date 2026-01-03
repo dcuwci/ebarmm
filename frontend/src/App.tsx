@@ -6,6 +6,7 @@ import PublicLayout from './components/layout/PublicLayout'
 import AdminLayout from './components/layout/AdminLayout'
 
 // Public routes
+import Landing from './routes/public/Landing'
 import PublicPortal from './routes/public/PublicPortal'
 import PublicMap from './routes/public/PublicMap'
 import ProjectDetails from './routes/public/ProjectDetails'
@@ -28,11 +29,14 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public routes */}
-        <Route path="/" element={<PublicLayout />}>
-          <Route index element={<PublicPortal />} />
-          <Route path="map" element={<PublicMap />} />
-          <Route path="projects/:projectId" element={<ProjectDetails />} />
+        {/* Landing page - full screen carousel */}
+        <Route path="/" element={<Landing />} />
+
+        {/* Public routes with layout */}
+        <Route element={<PublicLayout />}>
+          <Route path="/portal" element={<PublicPortal />} />
+          <Route path="/map" element={<PublicMap />} />
+          <Route path="/projects/:projectId" element={<ProjectDetails />} />
         </Route>
 
         {/* Auth routes */}
