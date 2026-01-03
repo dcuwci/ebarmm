@@ -39,7 +39,7 @@ The fastest way to get the E-BARMM system running is with Docker Compose.
 5. **Access the application:**
    - **Frontend:** http://localhost:3000
    - **Backend API:** http://localhost:8000
-   - **API Docs:** http://localhost:8000/api/docs
+   - **API Docs:** http://localhost:8000/docs
    - **MinIO Console:** http://localhost:9001
 
 6. **Default credentials:**

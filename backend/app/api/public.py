@@ -356,6 +356,96 @@ async def get_public_statistics(
     )
 
 
+@router.get("/filter-options")
+async def get_filter_options(
+    db: Session = Depends(get_db)
+):
+    """
+    Get all filter options for dashboard.
+
+    Returns available values for:
+    - deos: List of DEOs with project counts
+    - provinces: List of unique provinces
+    - statuses: List of valid project statuses
+    - fund_years: List of years with projects
+    - fund_sources: List of unique fund sources
+    - modes_of_implementation: List of unique implementation modes
+    - project_scales: List of unique project scales
+    """
+    # Get DEOs with project counts
+    deos = db.query(
+        DEO.deo_id,
+        DEO.deo_name,
+        DEO.province,
+        func.count(Project.project_id).label('project_count')
+    ).outerjoin(
+        Project,
+        and_(
+            DEO.deo_id == Project.deo_id,
+            Project.status != 'deleted'
+        )
+    ).group_by(
+        DEO.deo_id,
+        DEO.deo_name,
+        DEO.province
+    ).all()
+
+    deos_list = [{
+        "deo_id": deo_id,
+        "deo_name": deo_name,
+        "province": province,
+        "project_count": project_count
+    } for deo_id, deo_name, province, project_count in deos]
+
+    # Get unique provinces
+    provinces = db.query(DEO.province).distinct().order_by(DEO.province).all()
+    provinces_list = [p[0] for p in provinces if p[0]]
+
+    # Valid statuses (excluding deleted and cancelled for public)
+    statuses = ['planning', 'ongoing', 'completed', 'suspended']
+
+    # Get unique fund years from projects
+    fund_years = db.query(Project.fund_year).filter(
+        Project.status != 'deleted',
+        Project.fund_year.isnot(None)
+    ).distinct().order_by(Project.fund_year.desc()).all()
+    fund_years_list = [y[0] for y in fund_years if y[0]]
+
+    # Get unique fund sources
+    fund_sources = db.query(Project.fund_source).filter(
+        Project.status != 'deleted',
+        Project.fund_source.isnot(None),
+        Project.fund_source != ''
+    ).distinct().order_by(Project.fund_source).all()
+    fund_sources_list = [f[0] for f in fund_sources if f[0]]
+
+    # Get unique modes of implementation
+    modes = db.query(Project.mode_of_implementation).filter(
+        Project.status != 'deleted',
+        Project.mode_of_implementation.isnot(None),
+        Project.mode_of_implementation != ''
+    ).distinct().order_by(Project.mode_of_implementation).all()
+    modes_list = [m[0] for m in modes if m[0]]
+
+    # Get unique project scales
+    scales = db.query(Project.project_scale).filter(
+        Project.status != 'deleted',
+        Project.project_scale.isnot(None),
+        Project.project_scale != ''
+    ).distinct().order_by(Project.project_scale).all()
+    scales_list = [s[0] for s in scales if s[0]]
+
+    return {
+        "deos": deos_list,
+        "provinces": provinces_list,
+        "statuses": statuses,
+        "fund_years": fund_years_list,
+        "fund_sources": fund_sources_list,
+        "modes_of_implementation": modes_list,
+        "project_scales": scales_list
+    }
+
+
 @router.get("/deos")
 async def get_public_deos(
     db: Session = Depends(get_db)

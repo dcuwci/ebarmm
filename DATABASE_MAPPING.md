@@ -1,5 +1,7 @@
 # Database Migration Mapping: Legacy MySQL → Target PostgreSQL
 
+> **Updated:** 2026-01-03 - Synchronized with actual implementation (01_create_tables.sql and SQLAlchemy models)
+
 ## 1. OVERVIEW
 
 This document maps each legacy MySQL table to the target PostgreSQL schema, explaining field transformations, data migrations, and architectural changes.
@@ -74,7 +76,7 @@ projects (
   percent_completion DECIMAL(5,2),      -- REMOVED (moved to logs)
   project_status VARCHAR(50),
   created_at DATETIME,
-  updated_at DATETIME                    -- REMOVED (immutable design)
+  updated_at DATETIME                    -- Retained (projects CAN be updated)
 );
 ```
 
@@ -92,7 +94,8 @@ projects (
   fund_year INT,
   status VARCHAR(50),                    -- Renamed from project_status
   created_at TIMESTAMP,
-  created_by UUID REFERENCES users(user_id) -- NEW FIELD
+  created_by UUID REFERENCES users(user_id), -- NEW FIELD
+  updated_at TIMESTAMP                   -- Retained for project metadata updates
 );
 ```
 
@@ -184,7 +187,7 @@ WHERE p.percent_completion IS NOT NULL;
 |--------------|--------------|----------------|
 | `project_id` (INT) | `project_id` (UUID) | Generate new UUID, maintain mapping |
 | `percent_completion` | ⚠️ REMOVED | Migrated to `project_progress_logs` |
-| `updated_at` | ⚠️ REMOVED | Used for initial progress log timestamp |
+| `updated_at` | `updated_at` | Direct copy (retained for project edits) |
 | `project_status` | `status` | Renamed for consistency |
 | N/A | `created_by` (NEW) | Default to migration system user |
 
@@ -363,13 +366,16 @@ project_photos (
 media_assets (
   media_id UUID PRIMARY KEY,
   project_id UUID REFERENCES projects(project_id),
-  media_type VARCHAR(20),      -- 'photo'
+  media_type VARCHAR(20),      -- 'photo', 'video', 'document'
   storage_key TEXT,            -- Object storage key
   latitude NUMERIC(10,7),
   longitude NUMERIC(10,7),
   captured_at TIMESTAMP,
   uploaded_by UUID REFERENCES users(user_id),
-  uploaded_at TIMESTAMP
+  uploaded_at TIMESTAMP,
+  attributes JSONB,            -- Flexible metadata
+  file_size BIGINT,            -- File size in bytes
+  mime_type VARCHAR(100)       -- MIME type (e.g., 'image/jpeg')
 );
 ```
 
@@ -450,6 +456,9 @@ JOIN migration.photo_storage_keys psk ON pp.photo_id = psk.legacy_photo_id;
 | N/A | `media_type` (NEW) | Hardcoded to 'photo' |
 | `capture_date` | `captured_at` + `uploaded_at` | Assume same timestamp |
 | `uploaded_by` (VARCHAR) | `uploaded_by` (UUID) | Map to system user |
+| N/A | `file_size` (NEW) | Read from uploaded file |
+| N/A | `mime_type` (NEW) | Detect from file extension |
+| N/A | `attributes` (NEW) | Additional metadata as JSONB |
 
 ---
 
@@ -946,14 +955,16 @@ DROP TABLE migration.routeshoot_storage_keys;
 ## 7. SUMMARY OF CHANGES
 
 ### Dropped Fields (Intentional)
-- `projects.updated_at` → Immutability principle (use audit_logs instead)
 - `projects.percent_completion` → Moved to append-only progress_logs
 
 ### New Fields (Enhancements)
 - All tables: UUID primary keys (better distribution, no collision)
 - `projects.created_by` → Audit trail
+- `projects.updated_at` → Track project metadata changes
 - `project_progress_logs.prev_hash` + `record_hash` → Tamper-proof
 - `media_assets.attributes` → Flexible metadata (JSONB)
+- `media_assets.file_size` → File size tracking
+- `media_assets.mime_type` → Content type identification
 - `gis_features.geometry` → Native spatial data (vs. file paths)
 
 ### Architectural Shifts

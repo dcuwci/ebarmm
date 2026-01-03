@@ -1,5 +1,7 @@
 # React Frontend Design
 
+> **Note:** This document describes the frontend architecture. As of 2026-01-03, all core frontend CRUD pages are implemented using Material-UI (MUI) and Leaflet for GIS editing.
+
 ## 1. APPLICATION ARCHITECTURE
 
 ### 1.1 Technology Stack
@@ -12,14 +14,14 @@
 - Zustand (client state)
 
 **UI Framework:**
-- Tailwind CSS (styling)
-- HeadlessUI or shadcn/ui (accessible components)
+- Material-UI (MUI) 7.x (primary component library)
+- Tailwind CSS (utility styling)
 - Lucide React (icons)
 
 **GIS:**
-- MapLibre GL JS (map rendering)
-- @mapbox/mapbox-gl-draw (geometry editing)
-- Turf.js (spatial operations)
+- Leaflet + react-leaflet (map rendering)
+- react-leaflet-draw + leaflet-draw (geometry editing)
+- wellknown (WKT parsing)
 
 **Forms & Validation:**
 - React Hook Form

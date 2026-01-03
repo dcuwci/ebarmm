@@ -9,3 +9,5 @@ export { Modal, ConfirmModal } from './Modal';
 export { LoadingSpinner, LoadingOverlay, EmptyState, Skeleton } from './Loading';
 export { Table, Pagination } from './Table';
 export type { Column } from './Table';
+export { FilterButton } from './FilterButton';
+export { DashboardFilter } from './DashboardFilter';

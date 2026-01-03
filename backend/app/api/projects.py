@@ -25,6 +25,10 @@ async def list_projects(
     fund_year: Optional[int] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    province: Optional[str] = None,
+    fund_source: Optional[str] = None,
+    mode_of_implementation: Optional[str] = None,
+    project_scale: Optional[str] = None,
     limit: int = Query(default=50, le=500),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -38,6 +42,10 @@ async def list_projects(
     - fund_year: Filter by year
     - status: Filter by status
     - search: Search in title and location
+    - province: Filter by province (via DEO)
+    - fund_source: Filter by fund source
+    - mode_of_implementation: Filter by implementation mode
+    - project_scale: Filter by project scale
     - limit: Max results (default 50, max 500)
     - offset: Pagination offset
     """
@@ -62,6 +70,18 @@ async def list_projects(
 
     if status is not None:
         query = query.filter(Project.status == status)
+
+    if province is not None:
+        query = query.filter(DEO.province == province)
+
+    if fund_source is not None:
+        query = query.filter(Project.fund_source == fund_source)
+
+    if mode_of_implementation is not None:
+        query = query.filter(Project.mode_of_implementation == mode_of_implementation)
+
+    if project_scale is not None:
+        query = query.filter(Project.project_scale == project_scale)
 
     if search:
         search_pattern = f"%{search}%"
