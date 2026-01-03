@@ -92,6 +92,23 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
+# Global exception handler for unhandled errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch-all exception handler to ensure proper JSON response with CORS headers"""
+    logger.exception(f"Unhandled exception at {request.url}: {exc}")
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "type": "https://api.ebarmm.gov.ph/errors/internal-error",
+            "title": "Internal Server Error",
+            "status": 500,
+            "detail": str(exc) if settings.DEBUG else "An unexpected error occurred",
+            "instance": str(request.url)
+        }
+    )
+
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():

@@ -96,14 +96,15 @@ async def get_public_projects(
 
         # Get primary GIS feature geometry as WKT
         geometry_wkt = None
-        gis_feature = db.query(GISFeature).filter(
-            GISFeature.project_id == project.project_id
-        ).first()
-        if gis_feature:
+        try:
             wkt_result = db.query(func.ST_AsText(GISFeature.geometry)).filter(
-                GISFeature.feature_id == gis_feature.feature_id
-            ).scalar()
-            geometry_wkt = wkt_result
+                GISFeature.project_id == project.project_id
+            ).limit(1).scalar()
+            if wkt_result:
+                geometry_wkt = wkt_result
+        except Exception:
+            # Geometry query failed, leave as None
+            pass
 
         projects.append({
             "project_id": str(project.project_id),
