@@ -4,20 +4,33 @@
  */
 
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
+import Paper from '@mui/material/Paper'
+import TextField from '@mui/material/TextField'
+import InputAdornment from '@mui/material/InputAdornment'
+import MenuItem from '@mui/material/MenuItem'
+import Select from '@mui/material/Select'
+import FormControl from '@mui/material/FormControl'
+import InputLabel from '@mui/material/InputLabel'
+import Chip from '@mui/material/Chip'
+import LinearProgress from '@mui/material/LinearProgress'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
+import TablePagination from '@mui/material/TablePagination'
 import {
   Search,
-  Filter,
   Download,
   Plus,
-  ChevronLeft,
-  ChevronRight,
   Eye,
   Edit,
 } from 'lucide-react'
+import { Button, Table, LoadingSpinner } from '../../components/mui'
+import type { Column } from '../../components/mui'
 import { fetchProjects } from '../../api/projects'
-import type { ProjectStatus } from '../../types/project'
+import type { Project, ProjectStatus } from '../../types/project'
 import { format } from 'date-fns'
 
 const STATUS_OPTIONS: { value: ProjectStatus | ''; label: string }[] = [
@@ -29,23 +42,27 @@ const STATUS_OPTIONS: { value: ProjectStatus | ''; label: string }[] = [
   { value: 'cancelled', label: 'Cancelled' },
 ]
 
-const STATUS_COLORS: Record<ProjectStatus, string> = {
-  planning: 'bg-gray-100 text-gray-800',
-  ongoing: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  suspended: 'bg-yellow-100 text-yellow-800',
-  cancelled: 'bg-red-100 text-red-800',
-  deleted: 'bg-gray-100 text-gray-500',
+const getStatusColor = (status: ProjectStatus): 'default' | 'primary' | 'success' | 'warning' | 'error' => {
+  const colors: Record<ProjectStatus, 'default' | 'primary' | 'success' | 'warning' | 'error'> = {
+    planning: 'default',
+    ongoing: 'primary',
+    completed: 'success',
+    suspended: 'warning',
+    cancelled: 'error',
+    deleted: 'default',
+  }
+  return colors[status] || 'default'
 }
 
 export default function ProjectList() {
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<ProjectStatus | ''>('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 25
+  const [currentPage, setCurrentPage] = useState(0)
+  const [itemsPerPage, setItemsPerPage] = useState(25)
 
   // Calculate offset
-  const offset = (currentPage - 1) * itemsPerPage
+  const offset = currentPage * itemsPerPage
 
   // Fetch projects
   const { data, isLoading, error } = useQuery({
@@ -59,16 +76,12 @@ export default function ProjectList() {
       }),
   })
 
-  // Calculate total pages
-  const totalPages = data ? Math.ceil(data.total / itemsPerPage) : 0
-
   /**
    * Export to CSV
    */
   const handleExportCSV = () => {
     if (!data?.items.length) return
 
-    // CSV headers
     const headers = [
       'Project ID',
       'DEO',
@@ -84,7 +97,6 @@ export default function ProjectList() {
       'Created At',
     ]
 
-    // CSV rows
     const rows = data.items.map((project) => [
       project.project_id,
       project.deo_name || '',
@@ -100,7 +112,6 @@ export default function ProjectList() {
       format(new Date(project.created_at), 'yyyy-MM-dd HH:mm:ss'),
     ])
 
-    // Combine headers and rows
     const csvContent = [
       headers.join(','),
       ...rows.map((row) =>
@@ -108,7 +119,6 @@ export default function ProjectList() {
       ),
     ].join('\n')
 
-    // Download file
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     const url = URL.createObjectURL(blob)
@@ -120,9 +130,6 @@ export default function ProjectList() {
     document.body.removeChild(link)
   }
 
-  /**
-   * Format currency
-   */
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-PH', {
       style: 'currency',
@@ -130,235 +137,237 @@ export default function ProjectList() {
     }).format(amount)
   }
 
+  const columns: Column<Project>[] = [
+    {
+      key: 'project_title',
+      header: 'Project',
+      render: (row) => (
+        <Box>
+          <Typography variant="body2" fontWeight={500}>
+            {row.project_title}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {row.fund_source}
+          </Typography>
+        </Box>
+      ),
+    },
+    {
+      key: 'deo_name',
+      header: 'DEO',
+      render: (row) => (
+        <Typography variant="body2">{row.deo_name}</Typography>
+      ),
+    },
+    {
+      key: 'location',
+      header: 'Location',
+      render: (row) => (
+        <Typography variant="body2" color="text.secondary">
+          {row.location || '—'}
+        </Typography>
+      ),
+    },
+    {
+      key: 'project_cost',
+      header: 'Cost',
+      render: (row) => (
+        <Typography variant="body2">{formatCurrency(row.project_cost)}</Typography>
+      ),
+    },
+    {
+      key: 'fund_year',
+      header: 'Year',
+      render: (row) => (
+        <Typography variant="body2" color="text.secondary">
+          {row.fund_year}
+        </Typography>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      align: 'center',
+      render: (row) => (
+        <Chip
+          label={row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+          color={getStatusColor(row.status)}
+          size="small"
+        />
+      ),
+    },
+    {
+      key: 'current_progress',
+      header: 'Progress',
+      render: (row) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <LinearProgress
+            variant="determinate"
+            value={row.current_progress || 0}
+            sx={{ width: 60, height: 6, borderRadius: 1 }}
+          />
+          <Typography variant="body2" color="text.secondary">
+            {Math.round(row.current_progress || 0)}%
+          </Typography>
+        </Box>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      render: (row) => (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+          <Tooltip title="View details">
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation()
+                navigate(`/admin/projects/${row.project_id}`)
+              }}
+            >
+              <Eye size={18} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Edit project">
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation()
+                navigate(`/admin/projects/${row.project_id}/edit`)
+              }}
+            >
+              <Edit size={18} />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      ),
+    },
+  ]
+
   return (
-    <div className="p-6 space-y-6">
+    <Box sx={{ p: 3 }}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Projects</h1>
-          <p className="text-gray-600 mt-1">
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+        <Box>
+          <Typography variant="h4" fontWeight={700}>
+            Projects
+          </Typography>
+          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
             Manage infrastructure projects across BARMM
-          </p>
-        </div>
-        <Link
-          to="/admin/projects/new"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          </Typography>
+        </Box>
+        <Button
+          variant="primary"
+          onClick={() => navigate('/admin/projects/new')}
+          startIcon={<Plus size={20} />}
         >
-          <Plus size={20} />
           New Project
-        </Link>
-      </div>
+        </Button>
+      </Box>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Search */}
-          <div className="relative">
-            <Search
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-              size={20}
-            />
-            <input
-              type="text"
-              placeholder="Search by title or location..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                setCurrentPage(1) // Reset to first page on search
-              }}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <TextField
+            placeholder="Search by title or location..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setCurrentPage(0)
+            }}
+            size="small"
+            sx={{ minWidth: 300, flex: 1 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search size={20} color="#9e9e9e" />
+                </InputAdornment>
+              ),
+            }}
+          />
 
-          {/* Status Filter */}
-          <div className="relative">
-            <Filter
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-              size={20}
-            />
-            <select
+          <FormControl size="small" sx={{ minWidth: 180 }}>
+            <InputLabel>Status</InputLabel>
+            <Select
               value={status}
+              label="Status"
               onChange={(e) => {
                 setStatus(e.target.value as ProjectStatus | '')
-                setCurrentPage(1) // Reset to first page on filter
+                setCurrentPage(0)
               }}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
             >
               {STATUS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
+                <MenuItem key={option.value} value={option.value}>
                   {option.label}
-                </option>
+                </MenuItem>
               ))}
-            </select>
-          </div>
+            </Select>
+          </FormControl>
 
-          {/* Export Button */}
-          <button
+          <Button
+            variant="secondary"
             onClick={handleExportCSV}
             disabled={!data?.items.length}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            startIcon={<Download size={20} />}
           >
-            <Download size={20} />
             Export CSV
-          </button>
-        </div>
-      </div>
+          </Button>
+        </Box>
+      </Paper>
 
       {/* Results Summary */}
       {data && (
-        <div className="text-sm text-gray-600">
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Showing {offset + 1} - {Math.min(offset + itemsPerPage, data.total)} of{' '}
           {data.total} projects
-        </div>
+        </Typography>
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <Paper sx={{ overflow: 'hidden' }}>
         {isLoading ? (
-          <div className="p-8 text-center">
-            <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="mt-2 text-gray-600">Loading projects...</p>
-          </div>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 6 }}>
+            <LoadingSpinner size="lg" />
+            <Typography color="text.secondary" sx={{ mt: 2 }}>
+              Loading projects...
+            </Typography>
+          </Box>
         ) : error ? (
-          <div className="p-8 text-center text-red-600">
-            Error loading projects. Please try again.
-          </div>
+          <Box sx={{ textAlign: 'center', py: 6 }}>
+            <Typography color="error">
+              Error loading projects. Please try again.
+            </Typography>
+          </Box>
         ) : !data?.items.length ? (
-          <div className="p-8 text-center text-gray-500">
-            No projects found. Try adjusting your filters or create a new project.
-          </div>
+          <Box sx={{ textAlign: 'center', py: 6 }}>
+            <Typography color="text.secondary">
+              No projects found. Try adjusting your filters or create a new project.
+            </Typography>
+          </Box>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Project
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    DEO
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Location
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Cost
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Year
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Progress
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {data.items.map((project) => (
-                  <tr key={project.project_id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">
-                        {project.project_title}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {project.fund_source}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {project.deo_name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {project.location || '—'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCurrency(project.project_cost)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {project.fund_year}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          STATUS_COLORS[project.status]
-                        }`}
-                      >
-                        {project.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-full bg-gray-200 rounded-full h-2 mr-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full"
-                            style={{
-                              width: `${project.current_progress || 0}%`,
-                            }}
-                          ></div>
-                        </div>
-                        <span className="text-sm text-gray-600">
-                          {Math.round(project.current_progress || 0)}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          to={`/admin/projects/${project.project_id}`}
-                          className="text-blue-600 hover:text-blue-900 p-1"
-                          title="View details"
-                        >
-                          <Eye size={18} />
-                        </Link>
-                        <Link
-                          to={`/admin/projects/${project.project_id}/edit`}
-                          className="text-gray-600 hover:text-gray-900 p-1"
-                          title="Edit project"
-                        >
-                          <Edit size={18} />
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <Table
+              columns={columns}
+              data={data.items}
+              rowKey={(row) => row.project_id}
+              onRowClick={(row) => navigate(`/admin/projects/${row.project_id}`)}
+            />
+            <TablePagination
+              component="div"
+              count={data.total}
+              page={currentPage}
+              onPageChange={(_, newPage) => setCurrentPage(newPage)}
+              rowsPerPage={itemsPerPage}
+              onRowsPerPageChange={(e) => {
+                setItemsPerPage(parseInt(e.target.value, 10))
+                setCurrentPage(0)
+              }}
+              rowsPerPageOptions={[10, 25, 50, 100]}
+            />
+          </>
         )}
-      </div>
-
-      {/* Pagination */}
-      {data && totalPages > 1 && (
-        <div className="flex items-center justify-between bg-white px-4 py-3 rounded-lg shadow">
-          <div className="text-sm text-gray-700">
-            Page {currentPage} of {totalPages}
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              className="inline-flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft size={16} />
-              Previous
-            </button>
-            <button
-              onClick={() =>
-                setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-              }
-              disabled={currentPage === totalPages}
-              className="inline-flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              Next
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+      </Paper>
+    </Box>
   )
 }

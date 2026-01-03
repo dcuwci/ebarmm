@@ -1,10 +1,16 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { StatCard, Card, CardHeader, LoadingSpinner, Table, Button } from '../../components/common';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Grid from '@mui/material/Grid';
+import Chip from '@mui/material/Chip';
+import LinearProgress from '@mui/material/LinearProgress';
+import { Building2, Zap, CheckCircle, DollarSign, Plus, ClipboardList, Map } from 'lucide-react';
+import { StatCard, Card, CardHeader, LoadingSpinner, Table, Button } from '../../components/mui';
 import { useAuthStore } from '../../stores/authStore';
 import { apiClient } from '../../api/client';
-import type { Column } from '../../components/common';
+import type { Column } from '../../components/mui';
 
 interface DashboardStats {
   total_projects: number;
@@ -87,14 +93,14 @@ export default function Dashboard() {
     }).format(value);
   };
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      planning: 'bg-gray-100 text-gray-800',
-      ongoing: 'bg-blue-100 text-blue-800',
-      completed: 'bg-green-100 text-green-800',
-      suspended: 'bg-yellow-100 text-yellow-800'
+  const getStatusColor = (status: string): 'default' | 'primary' | 'success' | 'warning' => {
+    const colors: Record<string, 'default' | 'primary' | 'success' | 'warning'> = {
+      planning: 'default',
+      ongoing: 'primary',
+      completed: 'success',
+      suspended: 'warning'
     };
-    return colors[status] || 'bg-gray-100 text-gray-800';
+    return colors[status] || 'default';
   };
 
   const columns: Column<RecentProject>[] = [
@@ -102,10 +108,12 @@ export default function Dashboard() {
       key: 'project_title',
       header: 'Project',
       render: (row) => (
-        <div>
-          <p className="font-medium text-gray-900">{row.project_title}</p>
-          {row.deo_name && <p className="text-xs text-gray-500">{row.deo_name}</p>}
-        </div>
+        <Box>
+          <Typography variant="body2" fontWeight={500}>{row.project_title}</Typography>
+          {row.deo_name && (
+            <Typography variant="caption" color="text.secondary">{row.deo_name}</Typography>
+          )}
+        </Box>
       )
     },
     {
@@ -113,15 +121,16 @@ export default function Dashboard() {
       header: 'Progress',
       align: 'center',
       render: (row) => (
-        <div className="flex items-center justify-center">
-          <div className="w-24 bg-gray-200 rounded-full h-2 mr-2">
-            <div
-              className="bg-blue-600 h-2 rounded-full"
-              style={{ width: `${row.current_progress}%` }}
-            />
-          </div>
-          <span className="text-sm font-medium">{row.current_progress.toFixed(0)}%</span>
-        </div>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+          <LinearProgress
+            variant="determinate"
+            value={row.current_progress}
+            sx={{ width: 80, height: 6, borderRadius: 1 }}
+          />
+          <Typography variant="body2" fontWeight={500}>
+            {row.current_progress.toFixed(0)}%
+          </Typography>
+        </Box>
       )
     },
     {
@@ -129,111 +138,113 @@ export default function Dashboard() {
       header: 'Status',
       align: 'center',
       render: (row) => (
-        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(row.status)}`}>
-          {row.status.charAt(0).toUpperCase() + row.status.slice(1)}
-        </span>
+        <Chip
+          label={row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+          color={getStatusColor(row.status)}
+          size="small"
+        />
       )
     }
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <Box sx={{ maxWidth: 1280, mx: 'auto', px: { xs: 2, sm: 3, lg: 4 }, py: 4 }}>
       {/* Welcome Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={700}>
           Welcome back, {user?.username}
-        </h1>
-        <p className="text-gray-600 mt-1">
+        </Typography>
+        <Typography color="text.secondary" sx={{ mt: 0.5 }}>
           {user?.role === 'super_admin' && 'System Administrator Dashboard'}
           {user?.role === 'regional_admin' && 'Regional Administrator Dashboard'}
           {user?.role === 'deo_user' && 'DEO User Dashboard'}
-        </p>
-      </div>
+        </Typography>
+      </Box>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <Grid container spacing={3} sx={{ mb: 4 }}>
         {projectsLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="h-32 animate-pulse bg-gray-100"><div /></Card>
+            <Grid item xs={12} md={6} lg={3} key={i}>
+              <StatCard title="" value="" loading />
+            </Grid>
           ))
         ) : stats ? (
           <>
-            <StatCard
-              title={user?.role === 'deo_user' ? 'My DEO Projects' : 'Total Projects'}
-              value={user?.role === 'deo_user' ? (stats.my_deo_projects || 0) : stats.total_projects}
-              icon={
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-              }
-            />
-            <StatCard
-              title="Ongoing"
-              value={stats.ongoing_projects}
-              icon={
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              }
-            />
-            <StatCard
-              title="Completed"
-              value={stats.completed_projects}
-              icon={
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              }
-            />
-            <StatCard
-              title="Total Investment"
-              value={formatCurrency(stats.total_investment)}
-              icon={
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              }
-            />
+            <Grid item xs={12} md={6} lg={3}>
+              <StatCard
+                title={user?.role === 'deo_user' ? 'My DEO Projects' : 'Total Projects'}
+                value={user?.role === 'deo_user' ? (stats.my_deo_projects || 0) : stats.total_projects}
+                icon={<Building2 size={24} />}
+                color="#1976d2"
+              />
+            </Grid>
+            <Grid item xs={12} md={6} lg={3}>
+              <StatCard
+                title="Ongoing"
+                value={stats.ongoing_projects}
+                icon={<Zap size={24} />}
+                color="#ed6c02"
+              />
+            </Grid>
+            <Grid item xs={12} md={6} lg={3}>
+              <StatCard
+                title="Completed"
+                value={stats.completed_projects}
+                icon={<CheckCircle size={24} />}
+                color="#2e7d32"
+              />
+            </Grid>
+            <Grid item xs={12} md={6} lg={3}>
+              <StatCard
+                title="Total Investment"
+                value={formatCurrency(stats.total_investment)}
+                icon={<DollarSign size={24} />}
+                color="#9c27b0"
+              />
+            </Grid>
           </>
         ) : null}
-      </div>
+      </Grid>
 
       {/* Quick Actions */}
-      <Card className="mb-8">
-        <CardHeader title="Quick Actions" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Button
-            variant="primary"
-            onClick={() => navigate('/admin/projects/new')}
-            className="justify-center"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            New Project
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => navigate('/admin/projects')}
-            className="justify-center"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            View All Projects
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => navigate('/map')}
-            className="justify-center"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-            </svg>
-            View Map
-          </Button>
-        </div>
-      </Card>
+      <Box sx={{ mb: 4 }}>
+        <Card>
+          <CardHeader title="Quick Actions" />
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <Button
+                variant="primary"
+                fullWidth
+                onClick={() => navigate('/admin/projects/new')}
+                startIcon={<Plus size={20} />}
+              >
+                New Project
+              </Button>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={() => navigate('/admin/projects')}
+                startIcon={<ClipboardList size={20} />}
+              >
+                View All Projects
+              </Button>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={() => navigate('/map')}
+                startIcon={<Map size={20} />}
+              >
+                View Map
+              </Button>
+            </Grid>
+          </Grid>
+        </Card>
+      </Box>
 
       {/* Recent Projects */}
       <Card>
@@ -250,9 +261,9 @@ export default function Dashboard() {
           }
         />
         {projectsLoading ? (
-          <div className="flex justify-center py-8">
-            <LoadingSpinner size="lg" className="text-blue-600" />
-          </div>
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <LoadingSpinner size="lg" />
+          </Box>
         ) : recentProjects.length > 0 ? (
           <Table
             columns={columns}
@@ -261,11 +272,13 @@ export default function Dashboard() {
             onRowClick={(row) => navigate(`/admin/projects/${row.project_id}`)}
           />
         ) : (
-          <div className="text-center py-8 text-gray-500">
-            No projects yet. Create your first project to get started.
-          </div>
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography color="text.secondary">
+              No projects yet. Create your first project to get started.
+            </Typography>
+          </Box>
         )}
       </Card>
-    </div>
+    </Box>
   );
 }
