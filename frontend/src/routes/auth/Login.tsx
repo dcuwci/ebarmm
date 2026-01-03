@@ -1,6 +1,17 @@
+/**
+ * Login Page
+ * MUI-based authentication form
+ */
+
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Input, Button, Card } from '../../components/common';
+import Box from '@mui/material/Box';
+import Paper from '@mui/material/Paper';
+import Typography from '@mui/material/Typography';
+import TextField from '@mui/material/TextField';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import { Button } from '../../components/mui';
 import { useAuthStore } from '../../stores/authStore';
 import { apiClient } from '../../api/client';
 
@@ -84,22 +95,24 @@ export default function Login() {
       login(access_token, user);
 
       // Redirect to intended page or dashboard
-      const from = (location.state as any)?.from?.pathname || '/admin';
+      const from = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/admin';
       navigate(from, { replace: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
 
-      if (error.response?.status === 401) {
+      const axiosError = error as { response?: { status?: number; data?: { detail?: string } } };
+
+      if (axiosError.response?.status === 401) {
         setErrors({
           general: 'Invalid username or password'
         });
-      } else if (error.response?.status === 403) {
+      } else if (axiosError.response?.status === 403) {
         setErrors({
           general: 'Account is disabled. Please contact administrator.'
         });
-      } else if (error.response?.data?.detail) {
+      } else if (axiosError.response?.data?.detail) {
         setErrors({
-          general: error.response.data.detail
+          general: axiosError.response.data.detail
         });
       } else {
         setErrors({
@@ -112,94 +125,137 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">E-BARMM</h1>
-          <p className="text-lg text-gray-600">Enhanced BARMM Transparency System</p>
-        </div>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: 'background.default',
+        px: 2,
+      }}
+    >
+      <Box sx={{ maxWidth: 400, width: '100%' }}>
+        {/* Header */}
+        <Box sx={{ textAlign: 'center', mb: 4 }}>
+          <Typography variant="h3" fontWeight={700} color="primary.main">
+            E-BARMM
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
+            Enhanced BARMM Transparency System
+          </Typography>
+        </Box>
 
-        <Card>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Sign in</h2>
-              <p className="text-sm text-gray-600">
+        {/* Login Form */}
+        <Paper sx={{ p: 4 }}>
+          <form onSubmit={handleSubmit}>
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="h5" fontWeight={600}>
+                Sign in
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 Enter your credentials to access the system
-              </p>
-            </div>
+              </Typography>
+            </Box>
 
             {errors.general && (
-              <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
-                <p className="text-sm font-medium">{errors.general}</p>
-              </div>
+              <Alert severity="error" sx={{ mb: 3 }}>
+                {errors.general}
+              </Alert>
             )}
 
-            <Input
+            <TextField
               label="Username"
-              type="text"
               name="username"
               value={formData.username}
               onChange={handleChange}
-              error={errors.username}
+              error={!!errors.username}
+              helperText={errors.username}
               placeholder="Enter your username"
               required
+              fullWidth
               autoComplete="username"
               autoFocus
               disabled={loading}
+              sx={{ mb: 2 }}
             />
 
-            <Input
+            <TextField
               label="Password"
               type="password"
               name="password"
               value={formData.password}
               onChange={handleChange}
-              error={errors.password}
+              error={!!errors.password}
+              helperText={errors.password}
               placeholder="Enter your password"
               required
+              fullWidth
               autoComplete="current-password"
               disabled={loading}
+              sx={{ mb: 3 }}
             />
 
             <Button
               type="submit"
               variant="primary"
               fullWidth
-              loading={loading}
               disabled={loading}
             >
-              Sign in
+              {loading ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CircularProgress size={20} color="inherit" />
+                  Signing in...
+                </Box>
+              ) : (
+                'Sign in'
+              )}
             </Button>
 
-            <div className="text-center">
-              <p className="text-sm text-gray-600">
-                Forgot password? Contact your system administrator
-              </p>
-            </div>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 3, textAlign: 'center' }}>
+              Forgot password? Contact your system administrator
+            </Typography>
           </form>
-        </Card>
+        </Paper>
 
-        <div className="mt-8 text-center">
-          <div className="text-sm text-gray-600 space-y-1">
-            <p>Ministry of Public Works - BARMM</p>
-            <p>Bangsamoro Autonomous Region in Muslim Mindanao</p>
-          </div>
-        </div>
+        {/* Footer */}
+        <Box sx={{ mt: 4, textAlign: 'center' }}>
+          <Typography variant="body2" color="text.secondary">
+            Ministry of Public Works - BARMM
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Bangsamoro Autonomous Region in Muslim Mindanao
+          </Typography>
+        </Box>
 
         {/* Development credentials hint */}
         {import.meta.env.DEV && (
-          <Card className="mt-6 bg-yellow-50 border-2 border-yellow-200">
-            <div className="text-sm space-y-2">
-              <p className="font-semibold text-yellow-900">Development Credentials:</p>
-              <div className="space-y-1 text-yellow-800">
-                <p>Super Admin: <code className="bg-yellow-100 px-2 py-0.5 rounded">admin / Admin@2026</code></p>
-                <p>DEO User: <code className="bg-yellow-100 px-2 py-0.5 rounded">deo_user_1 / Deo@2026</code></p>
-                <p>Regional Admin: <code className="bg-yellow-100 px-2 py-0.5 rounded">regional_admin / Regional@2026</code></p>
-              </div>
-            </div>
-          </Card>
+          <Paper
+            sx={{
+              mt: 3,
+              p: 2,
+              bgcolor: 'warning.50',
+              border: 2,
+              borderColor: 'warning.300',
+            }}
+          >
+            <Typography variant="body2" fontWeight={600} color="warning.dark" sx={{ mb: 1 }}>
+              Development Credentials:
+            </Typography>
+            <Box sx={{ fontSize: '0.875rem', color: 'warning.dark' }}>
+              <Typography variant="body2">
+                Super Admin: <code style={{ background: '#fef3c7', padding: '2px 6px', borderRadius: 4 }}>admin / Admin@2026</code>
+              </Typography>
+              <Typography variant="body2">
+                DEO User: <code style={{ background: '#fef3c7', padding: '2px 6px', borderRadius: 4 }}>deo_user_1 / Deo@2026</code>
+              </Typography>
+              <Typography variant="body2">
+                Regional Admin: <code style={{ background: '#fef3c7', padding: '2px 6px', borderRadius: 4 }}>regional_admin / Regional@2026</code>
+              </Typography>
+            </Box>
+          </Paper>
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }

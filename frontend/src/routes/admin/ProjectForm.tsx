@@ -1,475 +1,510 @@
 /**
  * Project Form
- * Multi-step wizard for creating and editing projects
+ * MUI-based multi-step wizard for creating and editing projects
  */
 
-import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Check, Save } from 'lucide-react'
-import { projectFormSchema, type ProjectFormData } from '../../types/validation'
-import { createProject, updateProject, fetchProject } from '../../api/projects'
-import { getErrorMessage } from '../../api/client'
-import { useAuthStore } from '../../stores/authStore'
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Box from '@mui/material/Box';
+import Paper from '@mui/material/Paper';
+import Typography from '@mui/material/Typography';
+import TextField from '@mui/material/TextField';
+import MenuItem from '@mui/material/MenuItem';
+import Stepper from '@mui/material/Stepper';
+import Step from '@mui/material/Step';
+import StepLabel from '@mui/material/StepLabel';
+import Grid from '@mui/material/Grid';
+import Alert from '@mui/material/Alert';
+import { ChevronLeft, ChevronRight, Save } from 'lucide-react';
+import { Button, LoadingSpinner } from '../../components/mui';
+import { projectFormSchema, type ProjectFormData } from '../../types/validation';
+import { createProject, updateProject, fetchProject } from '../../api/projects';
+import { getErrorMessage } from '../../api/client';
+import { useAuthStore } from '../../stores/authStore';
 
-const STEPS = [
-  { id: 1, title: 'Basic Information', fields: ['project_title', 'location', 'fund_year'] },
-  {
-    id: 2,
-    title: 'Financial Details',
-    fields: ['fund_source', 'mode_of_implementation', 'project_cost', 'project_scale'],
-  },
-  { id: 3, title: 'Review & Submit', fields: [] },
-]
+const STEPS = ['Basic Information', 'Financial Details', 'Review & Submit'];
+
+const FUND_SOURCES = [
+  { value: 'GAA', label: 'General Appropriations Act (GAA)' },
+  { value: 'BTA', label: 'Block Transfer Agreement (BTA)' },
+  { value: 'LGU', label: 'Local Government Unit (LGU)' },
+  { value: 'INFRA', label: 'Infrastructure Fund' },
+  { value: 'ODA', label: 'Official Development Assistance (ODA)' },
+  { value: 'PPP', label: 'Public-Private Partnership (PPP)' },
+];
+
+const IMPLEMENTATION_MODES = [
+  { value: 'Contract', label: 'Contract' },
+  { value: 'Administration', label: 'Administration' },
+  { value: 'Negotiated', label: 'Negotiated Procurement' },
+];
+
+const PROJECT_SCALES = [
+  { value: 'Small', label: 'Small (Below PHP 1M)' },
+  { value: 'Medium', label: 'Medium (PHP 1M - 10M)' },
+  { value: 'Large', label: 'Large (PHP 10M - 100M)' },
+  { value: 'Major', label: 'Major (Above PHP 100M)' },
+];
 
 export default function ProjectForm() {
-  const navigate = useNavigate()
-  const { projectId } = useParams<{ projectId?: string }>()
-  const queryClient = useQueryClient()
-  const { user } = useAuthStore()
+  const navigate = useNavigate();
+  const { projectId } = useParams<{ projectId?: string }>();
+  const queryClient = useQueryClient();
+  const { user } = useAuthStore();
 
-  const [currentStep, setCurrentStep] = useState(1)
-  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [activeStep, setActiveStep] = useState(0);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const isEditMode = Boolean(projectId)
+  const isEditMode = Boolean(projectId);
 
-  // Form setup
+  // Form setup with react-hook-form
   const {
-    register,
+    control,
     handleSubmit,
     formState: { errors },
     setValue,
     watch,
+    trigger,
   } = useForm<ProjectFormData>({
     resolver: zodResolver(projectFormSchema),
     defaultValues: {
+      project_title: '',
+      location: '',
       fund_year: new Date().getFullYear(),
+      fund_source: '',
+      mode_of_implementation: '',
       project_cost: 0,
+      project_scale: '',
       status: 'planning',
     },
-  })
+  });
 
   // Fetch existing project for edit mode
   const { data: existingProject, isLoading: isLoadingProject } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => fetchProject(projectId!),
     enabled: isEditMode,
-  })
+  });
 
   // Populate form with existing data
   useEffect(() => {
     if (existingProject) {
-      setValue('project_title', existingProject.project_title)
-      setValue('location', existingProject.location || '')
-      setValue('fund_year', existingProject.fund_year)
-      setValue('fund_source', existingProject.fund_source || '')
-      setValue('mode_of_implementation', existingProject.mode_of_implementation || '')
-      setValue('project_cost', existingProject.project_cost)
-      setValue('project_scale', existingProject.project_scale || '')
-      setValue('status', existingProject.status)
-      setValue('deo_id', existingProject.deo_id)
+      setValue('project_title', existingProject.project_title);
+      setValue('location', existingProject.location || '');
+      setValue('fund_year', existingProject.fund_year);
+      setValue('fund_source', existingProject.fund_source || '');
+      setValue('mode_of_implementation', existingProject.mode_of_implementation || '');
+      setValue('project_cost', existingProject.project_cost);
+      setValue('project_scale', existingProject.project_scale || '');
+      setValue('status', existingProject.status);
+      setValue('deo_id', existingProject.deo_id);
     }
-  }, [existingProject, setValue])
+  }, [existingProject, setValue]);
 
   // Create mutation
   const createMutation = useMutation({
     mutationFn: createProject,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-      navigate('/admin/projects')
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      navigate('/admin/projects');
     },
     onError: (error) => {
-      setSubmitError(getErrorMessage(error))
+      setSubmitError(getErrorMessage(error));
     },
-  })
+  });
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: ({ projectId, data }: { projectId: string; data: any }) =>
+    mutationFn: ({ projectId, data }: { projectId: string; data: ProjectFormData }) =>
       updateProject(projectId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] })
-      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
-      navigate(`/admin/projects/${projectId}`)
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      navigate(`/admin/projects/${projectId}`);
     },
     onError: (error) => {
-      setSubmitError(getErrorMessage(error))
+      setSubmitError(getErrorMessage(error));
     },
-  })
+  });
 
   // Form submission
   const onSubmit = (data: ProjectFormData) => {
-    setSubmitError(null)
+    setSubmitError(null);
 
     // Set deo_id from user if deo_user role
     if (user?.role === 'deo_user' && user.deo_id) {
-      data.deo_id = user.deo_id
+      data.deo_id = user.deo_id;
     }
 
     if (isEditMode && projectId) {
-      updateMutation.mutate({ projectId, data })
+      updateMutation.mutate({ projectId, data });
     } else {
-      createMutation.mutate(data)
+      createMutation.mutate(data);
     }
-  }
+  };
 
   // Navigate to next step
-  const nextStep = () => {
-    if (currentStep < STEPS.length) {
-      setCurrentStep(currentStep + 1)
+  const handleNext = async () => {
+    // Validate current step fields before proceeding
+    let fieldsToValidate: (keyof ProjectFormData)[] = [];
+
+    if (activeStep === 0) {
+      fieldsToValidate = ['project_title', 'fund_year'];
+    } else if (activeStep === 1) {
+      fieldsToValidate = ['project_cost'];
     }
-  }
+
+    const isValid = await trigger(fieldsToValidate);
+    if (isValid) {
+      setActiveStep((prev) => prev + 1);
+    }
+  };
 
   // Navigate to previous step
-  const prevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1)
-    }
-  }
+  const handleBack = () => {
+    setActiveStep((prev) => prev - 1);
+  };
 
-  // Check if current step has errors
-  const hasStepErrors = (stepId: number) => {
-    const step = STEPS.find((s) => s.id === stepId)
-    if (!step) return false
-    return step.fields.some((field) => errors[field as keyof ProjectFormData])
-  }
+  // Watch form values for review step
+  const formValues = watch();
 
-  // Watch all form values for review step
-  const formValues = watch()
+  // Format currency for display
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP',
+    }).format(amount);
+  };
 
   if (isLoadingProject) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="inline-block w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-4 text-gray-600">Loading project...</p>
-        </div>
-      </div>
-    )
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <LoadingSpinner size="lg" />
+        <Typography color="text.secondary" sx={{ mt: 2 }}>
+          Loading project...
+        </Typography>
+      </Box>
+    );
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <Box sx={{ p: 3, maxWidth: 900, mx: 'auto' }}>
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" fontWeight={700}>
           {isEditMode ? 'Edit Project' : 'Create New Project'}
-        </h1>
-        <p className="text-gray-600 mt-1">
+        </Typography>
+        <Typography color="text.secondary" sx={{ mt: 0.5 }}>
           {isEditMode
             ? 'Update project information'
             : 'Add a new infrastructure project to the system'}
-        </p>
-      </div>
+        </Typography>
+      </Box>
 
-      {/* Progress Indicator */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          {STEPS.map((step, index) => (
-            <div key={step.id} className="flex-1">
-              <div className="flex items-center">
-                <div
-                  className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-colors ${
-                    currentStep > step.id
-                      ? 'bg-green-500 border-green-500 text-white'
-                      : currentStep === step.id
-                      ? 'bg-blue-600 border-blue-600 text-white'
-                      : hasStepErrors(step.id)
-                      ? 'bg-red-100 border-red-500 text-red-700'
-                      : 'bg-white border-gray-300 text-gray-500'
-                  }`}
-                >
-                  {currentStep > step.id ? (
-                    <Check size={20} />
-                  ) : (
-                    <span>{step.id}</span>
-                  )}
-                </div>
-                <div className="ml-3">
-                  <p
-                    className={`text-sm font-medium ${
-                      currentStep === step.id
-                        ? 'text-blue-600'
-                        : currentStep > step.id
-                        ? 'text-green-600'
-                        : 'text-gray-500'
-                    }`}
-                  >
-                    {step.title}
-                  </p>
-                </div>
-                {index < STEPS.length - 1 && (
-                  <div
-                    className={`flex-1 h-0.5 ml-4 ${
-                      currentStep > step.id ? 'bg-green-500' : 'bg-gray-300'
-                    }`}
-                  />
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Stepper */}
+      <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+        {STEPS.map((label) => (
+          <Step key={label}>
+            <StepLabel>{label}</StepLabel>
+          </Step>
+        ))}
+      </Stepper>
 
       {/* Form */}
       <form onSubmit={handleSubmit(onSubmit)}>
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <Paper sx={{ p: 4, mb: 3 }}>
           {/* Step 1: Basic Information */}
-          {currentStep === 1 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          {activeStep === 0 && (
+            <Box>
+              <Typography variant="h6" fontWeight={600} sx={{ mb: 3 }}>
                 Basic Information
-              </h2>
+              </Typography>
 
-              {/* Project Title */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Project Title <span className="text-red-500">*</span>
-                </label>
-                <input
-                  {...register('project_title')}
-                  type="text"
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.project_title ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="Enter project title"
-                />
-                {errors.project_title && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors.project_title.message}
-                  </p>
-                )}
-              </div>
+              <Grid container spacing={3}>
+                <Grid item xs={12}>
+                  <Controller
+                    name="project_title"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Project Title"
+                        required
+                        fullWidth
+                        error={!!errors.project_title}
+                        helperText={errors.project_title?.message}
+                        placeholder="Enter project title"
+                      />
+                    )}
+                  />
+                </Grid>
 
-              {/* Location */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Location
-                </label>
-                <input
-                  {...register('location')}
-                  type="text"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Municipality/City, Province"
-                />
-              </div>
+                <Grid item xs={12}>
+                  <Controller
+                    name="location"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Location"
+                        fullWidth
+                        placeholder="Municipality/City, Province"
+                      />
+                    )}
+                  />
+                </Grid>
 
-              {/* Fund Year */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Fund Year <span className="text-red-500">*</span>
-                </label>
-                <input
-                  {...register('fund_year', { valueAsNumber: true })}
-                  type="number"
-                  min="2010"
-                  max="2050"
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.fund_year ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                />
-                {errors.fund_year && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors.fund_year.message}
-                  </p>
-                )}
-              </div>
-            </div>
+                <Grid item xs={12} md={6}>
+                  <Controller
+                    name="fund_year"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Fund Year"
+                        required
+                        fullWidth
+                        type="number"
+                        inputProps={{ min: 2010, max: 2050 }}
+                        error={!!errors.fund_year}
+                        helperText={errors.fund_year?.message}
+                        onChange={(e) => field.onChange(parseInt(e.target.value, 10))}
+                      />
+                    )}
+                  />
+                </Grid>
+              </Grid>
+            </Box>
           )}
 
           {/* Step 2: Financial Details */}
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          {activeStep === 1 && (
+            <Box>
+              <Typography variant="h6" fontWeight={600} sx={{ mb: 3 }}>
                 Financial Details
-              </h2>
+              </Typography>
 
-              {/* Fund Source */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Fund Source
-                </label>
-                <select
-                  {...register('fund_source')}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select fund source</option>
-                  <option value="GAA">General Appropriations Act (GAA)</option>
-                  <option value="BTA">Block Transfer Agreement (BTA)</option>
-                  <option value="LGU">Local Government Unit (LGU)</option>
-                  <option value="INFRA">Infrastructure Fund</option>
-                  <option value="ODA">Official Development Assistance (ODA)</option>
-                  <option value="PPP">Public-Private Partnership (PPP)</option>
-                </select>
-              </div>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Controller
+                    name="fund_source"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        select
+                        label="Fund Source"
+                        fullWidth
+                      >
+                        <MenuItem value="">Select fund source</MenuItem>
+                        {FUND_SOURCES.map((option) => (
+                          <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    )}
+                  />
+                </Grid>
 
-              {/* Mode of Implementation */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mode of Implementation
-                </label>
-                <select
-                  {...register('mode_of_implementation')}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select mode</option>
-                  <option value="Contract">Contract</option>
-                  <option value="Administration">Administration</option>
-                  <option value="Negotiated">Negotiated Procurement</option>
-                </select>
-              </div>
+                <Grid item xs={12} md={6}>
+                  <Controller
+                    name="mode_of_implementation"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        select
+                        label="Mode of Implementation"
+                        fullWidth
+                      >
+                        <MenuItem value="">Select mode</MenuItem>
+                        {IMPLEMENTATION_MODES.map((option) => (
+                          <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    )}
+                  />
+                </Grid>
 
-              {/* Project Cost */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Project Cost (PHP) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  {...register('project_cost', { valueAsNumber: true })}
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.project_cost ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                  placeholder="0.00"
-                />
-                {errors.project_cost && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors.project_cost.message}
-                  </p>
-                )}
-              </div>
+                <Grid item xs={12} md={6}>
+                  <Controller
+                    name="project_cost"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Project Cost (PHP)"
+                        required
+                        fullWidth
+                        type="number"
+                        inputProps={{ min: 0, step: 0.01 }}
+                        error={!!errors.project_cost}
+                        helperText={errors.project_cost?.message}
+                        onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                      />
+                    )}
+                  />
+                </Grid>
 
-              {/* Project Scale */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Project Scale
-                </label>
-                <select
-                  {...register('project_scale')}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select scale</option>
-                  <option value="Small">Small (Below ₱1M)</option>
-                  <option value="Medium">Medium (₱1M - ₱10M)</option>
-                  <option value="Large">Large (₱10M - ₱100M)</option>
-                  <option value="Major">Major (Above ₱100M)</option>
-                </select>
-              </div>
-            </div>
+                <Grid item xs={12} md={6}>
+                  <Controller
+                    name="project_scale"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        select
+                        label="Project Scale"
+                        fullWidth
+                      >
+                        <MenuItem value="">Select scale</MenuItem>
+                        {PROJECT_SCALES.map((option) => (
+                          <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    )}
+                  />
+                </Grid>
+              </Grid>
+            </Box>
           )}
 
           {/* Step 3: Review & Submit */}
-          {currentStep === 3 && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          {activeStep === 2 && (
+            <Box>
+              <Typography variant="h6" fontWeight={600} sx={{ mb: 3 }}>
                 Review & Submit
-              </h2>
+              </Typography>
 
-              <div className="bg-gray-50 rounded-lg p-4 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Project Title</p>
-                    <p className="text-gray-900">{formValues.project_title || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Location</p>
-                    <p className="text-gray-900">{formValues.location || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Fund Year</p>
-                    <p className="text-gray-900">{formValues.fund_year || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Fund Source</p>
-                    <p className="text-gray-900">{formValues.fund_source || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
+              <Paper variant="outlined" sx={{ p: 3, bgcolor: 'grey.50' }}>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      Project Title
+                    </Typography>
+                    <Typography fontWeight={500}>
+                      {formValues.project_title || '—'}
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      Location
+                    </Typography>
+                    <Typography fontWeight={500}>
+                      {formValues.location || '—'}
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      Fund Year
+                    </Typography>
+                    <Typography fontWeight={500}>
+                      {formValues.fund_year || '—'}
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      Fund Source
+                    </Typography>
+                    <Typography fontWeight={500}>
+                      {formValues.fund_source || '—'}
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="caption" color="text.secondary">
                       Mode of Implementation
-                    </p>
-                    <p className="text-gray-900">
+                    </Typography>
+                    <Typography fontWeight={500}>
                       {formValues.mode_of_implementation || '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Project Cost</p>
-                    <p className="text-gray-900">
-                      {formValues.project_cost
-                        ? new Intl.NumberFormat('en-PH', {
-                            style: 'currency',
-                            currency: 'PHP',
-                          }).format(formValues.project_cost)
-                        : '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Project Scale</p>
-                    <p className="text-gray-900">{formValues.project_scale || '—'}</p>
-                  </div>
-                </div>
-              </div>
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      Project Cost
+                    </Typography>
+                    <Typography fontWeight={500}>
+                      {formValues.project_cost ? formatCurrency(formValues.project_cost) : '—'}
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="caption" color="text.secondary">
+                      Project Scale
+                    </Typography>
+                    <Typography fontWeight={500}>
+                      {formValues.project_scale || '—'}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Paper>
 
               {submitError && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-sm text-red-700">{submitError}</p>
-                </div>
+                <Alert severity="error" sx={{ mt: 3 }}>
+                  {submitError}
+                </Alert>
               )}
-            </div>
+            </Box>
           )}
-        </div>
+        </Paper>
 
         {/* Navigation Buttons */}
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
+        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+          <Button
+            variant="ghost"
             onClick={() => navigate('/admin/projects')}
-            className="px-4 py-2 text-gray-700 hover:text-gray-900"
           >
             Cancel
-          </button>
+          </Button>
 
-          <div className="flex gap-3">
-            {currentStep > 1 && (
-              <button
-                type="button"
-                onClick={prevStep}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            {activeStep > 0 && (
+              <Button
+                variant="secondary"
+                onClick={handleBack}
+                startIcon={<ChevronLeft size={20} />}
               >
-                <ChevronLeft size={20} />
                 Previous
-              </button>
+              </Button>
             )}
 
-            {currentStep < STEPS.length ? (
-              <button
-                type="button"
-                onClick={nextStep}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            {activeStep < STEPS.length - 1 ? (
+              <Button
+                variant="primary"
+                onClick={handleNext}
+                endIcon={<ChevronRight size={20} />}
               >
                 Next
-                <ChevronRight size={20} />
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button
+                variant="primary"
                 type="submit"
                 disabled={createMutation.isPending || updateMutation.isPending}
-                className="inline-flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                startIcon={<Save size={20} />}
               >
-                <Save size={20} />
                 {createMutation.isPending || updateMutation.isPending
                   ? 'Saving...'
                   : isEditMode
                   ? 'Update Project'
                   : 'Create Project'}
-              </button>
+              </Button>
             )}
-          </div>
-        </div>
+          </Box>
+        </Box>
       </form>
-    </div>
-  )
+    </Box>
+  );
 }

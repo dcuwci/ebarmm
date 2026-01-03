@@ -1,11 +1,20 @@
 /**
  * Project Detail Page
- * Tabbed interface for viewing project details, progress, GIS, media, and audit logs
+ * MUI-based tabbed interface for viewing project details, progress, GIS, media, and audit logs
  */
 
-import { useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import Box from '@mui/material/Box';
+import Paper from '@mui/material/Paper';
+import Typography from '@mui/material/Typography';
+import Chip from '@mui/material/Chip';
+import Grid from '@mui/material/Grid';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
+import LinearProgress from '@mui/material/LinearProgress';
+import Alert from '@mui/material/Alert';
 import {
   ArrowLeft,
   Edit,
@@ -18,324 +27,340 @@ import {
   Map,
   History,
   Shield,
-} from 'lucide-react'
-import { fetchProject } from '../../api/projects'
-import { format } from 'date-fns'
+} from 'lucide-react';
+import { Button, LoadingSpinner } from '../../components/mui';
+import { fetchProject } from '../../api/projects';
+import { format } from 'date-fns';
 
-type TabId = 'overview' | 'progress' | 'gis' | 'media' | 'audit'
+type TabId = 'overview' | 'progress' | 'gis' | 'media' | 'audit';
 
-const TABS: { id: TabId; label: string; icon: any }[] = [
-  { id: 'overview', label: 'Overview', icon: FileText },
-  { id: 'progress', label: 'Progress', icon: TrendingUp },
-  { id: 'gis', label: 'GIS Data', icon: Map },
-  { id: 'media', label: 'Media', icon: Image },
-  { id: 'audit', label: 'Audit Log', icon: History },
-]
-
-const STATUS_COLORS: Record<string, string> = {
-  planning: 'bg-gray-100 text-gray-800',
-  ongoing: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  suspended: 'bg-yellow-100 text-yellow-800',
-  cancelled: 'bg-red-100 text-red-800',
-  deleted: 'bg-gray-100 text-gray-500',
+interface TabPanelProps {
+  children?: React.ReactNode;
+  value: TabId;
+  current: TabId;
 }
 
+function TabPanel({ children, value, current }: TabPanelProps) {
+  return (
+    <Box role="tabpanel" hidden={value !== current} sx={{ pt: 3 }}>
+      {value === current && children}
+    </Box>
+  );
+}
+
+const STATUS_COLORS: Record<string, 'default' | 'primary' | 'success' | 'warning' | 'error'> = {
+  planning: 'default',
+  ongoing: 'primary',
+  completed: 'success',
+  suspended: 'warning',
+  cancelled: 'error',
+  deleted: 'default',
+};
+
 export default function ProjectDetail() {
-  const { projectId } = useParams<{ projectId: string }>()
-  const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState<TabId>('overview')
+  const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<TabId>('overview');
 
   // Fetch project data
   const { data: project, isLoading, error } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => fetchProject(projectId!),
     enabled: Boolean(projectId),
-  })
+  });
 
-  /**
-   * Format currency
-   */
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-PH', {
       style: 'currency',
       currency: 'PHP',
-    }).format(amount)
-  }
+    }).format(amount);
+  };
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: TabId) => {
+    setActiveTab(newValue);
+  };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="inline-block w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-4 text-gray-600">Loading project...</p>
-        </div>
-      </div>
-    )
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <LoadingSpinner size="lg" />
+        <Typography color="text.secondary" sx={{ mt: 2 }}>
+          Loading project...
+        </Typography>
+      </Box>
+    );
   }
 
   if (error || !project) {
     return (
-      <div className="p-6">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-700">Error loading project. Please try again.</p>
-        </div>
-      </div>
-    )
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Error loading project. Please try again.
+        </Alert>
+        <Button variant="secondary" onClick={() => navigate('/admin/projects')}>
+          Back to Projects
+        </Button>
+      </Box>
+    );
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <Box sx={{ p: 3 }}>
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <Link
-            to="/admin/projects"
-            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-3"
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4 }}>
+        <Box>
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/admin/projects')}
+            startIcon={<ArrowLeft size={20} />}
+            size="sm"
           >
-            <ArrowLeft size={20} />
             Back to Projects
-          </Link>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          </Button>
+
+          <Typography variant="h4" fontWeight={700} sx={{ mt: 2, mb: 1 }}>
             {project.project_title}
-          </h1>
-          <div className="flex items-center gap-4 text-gray-600">
-            <div className="flex items-center gap-1">
+          </Typography>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
               <MapPin size={16} />
-              <span>{project.location || 'No location specified'}</span>
-            </div>
-            <div className="flex items-center gap-1">
+              <Typography variant="body2">
+                {project.location || 'No location specified'}
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'text.secondary' }}>
               <Calendar size={16} />
-              <span>Fund Year {project.fund_year}</span>
-            </div>
-            <span
-              className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
-                STATUS_COLORS[project.status]
-              }`}
-            >
-              {project.status}
-            </span>
-          </div>
-        </div>
-        <Link
-          to={`/admin/projects/${projectId}/edit`}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              <Typography variant="body2">
+                Fund Year {project.fund_year}
+              </Typography>
+            </Box>
+
+            <Chip
+              label={project.status.charAt(0).toUpperCase() + project.status.slice(1)}
+              color={STATUS_COLORS[project.status] || 'default'}
+              size="small"
+            />
+          </Box>
+        </Box>
+
+        <Button
+          variant="primary"
+          onClick={() => navigate(`/admin/projects/${projectId}/edit`)}
+          startIcon={<Edit size={20} />}
         >
-          <Edit size={20} />
           Edit Project
-        </Link>
-      </div>
+        </Button>
+      </Box>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex gap-6">
-          {TABS.map((tab) => {
-            const Icon = tab.icon
-            const isActive = activeTab === tab.id
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`inline-flex items-center gap-2 px-1 py-3 border-b-2 font-medium text-sm transition-colors ${
-                  isActive
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <Icon size={18} />
-                {tab.label}
-              </button>
-            )
-          })}
-        </nav>
-      </div>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={activeTab} onChange={handleTabChange}>
+          <Tab icon={<FileText size={18} />} iconPosition="start" label="Overview" value="overview" />
+          <Tab icon={<TrendingUp size={18} />} iconPosition="start" label="Progress" value="progress" />
+          <Tab icon={<Map size={18} />} iconPosition="start" label="GIS Data" value="gis" />
+          <Tab icon={<Image size={18} />} iconPosition="start" label="Media" value="media" />
+          <Tab icon={<History size={18} />} iconPosition="start" label="Audit Log" value="audit" />
+        </Tabs>
+      </Box>
 
       {/* Tab Content */}
-      <div className="bg-white rounded-lg shadow p-6">
+      <Paper sx={{ p: 3, mt: 0 }}>
         {/* Overview Tab */}
-        {activeTab === 'overview' && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Project Overview
-            </h2>
+        <TabPanel value="overview" current={activeTab}>
+          <Typography variant="h6" fontWeight={600} sx={{ mb: 3 }}>
+            Project Overview
+          </Typography>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-blue-50 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-blue-600 mb-1">
+          {/* Stats Cards */}
+          <Grid container spacing={3} sx={{ mb: 4 }}>
+            <Grid item xs={12} md={4}>
+              <Paper
+                variant="outlined"
+                sx={{ p: 2.5, bgcolor: 'primary.50', borderColor: 'primary.200' }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'primary.main', mb: 1 }}>
                   <DollarSign size={20} />
-                  <span className="text-sm font-medium">Project Cost</span>
-                </div>
-                <p className="text-2xl font-bold text-gray-900">
+                  <Typography variant="body2" fontWeight={500}>Project Cost</Typography>
+                </Box>
+                <Typography variant="h5" fontWeight={700}>
                   {formatCurrency(project.project_cost)}
-                </p>
-              </div>
+                </Typography>
+              </Paper>
+            </Grid>
 
-              <div className="bg-green-50 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-green-600 mb-1">
+            <Grid item xs={12} md={4}>
+              <Paper
+                variant="outlined"
+                sx={{ p: 2.5, bgcolor: 'success.50', borderColor: 'success.200' }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'success.main', mb: 1 }}>
                   <TrendingUp size={20} />
-                  <span className="text-sm font-medium">Current Progress</span>
-                </div>
-                <p className="text-2xl font-bold text-gray-900">
+                  <Typography variant="body2" fontWeight={500}>Current Progress</Typography>
+                </Box>
+                <Typography variant="h5" fontWeight={700}>
                   {Math.round(project.current_progress || 0)}%
-                </p>
-              </div>
+                </Typography>
+              </Paper>
+            </Grid>
 
-              <div className="bg-purple-50 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-purple-600 mb-1">
+            <Grid item xs={12} md={4}>
+              <Paper
+                variant="outlined"
+                sx={{ p: 2.5, bgcolor: 'secondary.50', borderColor: 'secondary.200' }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'secondary.main', mb: 1 }}>
                   <Shield size={20} />
-                  <span className="text-sm font-medium">DEO</span>
-                </div>
-                <p className="text-lg font-bold text-gray-900">
+                  <Typography variant="body2" fontWeight={500}>DEO</Typography>
+                </Box>
+                <Typography variant="h6" fontWeight={700}>
                   {project.deo_name || 'N/A'}
-                </p>
-              </div>
-            </div>
+                </Typography>
+              </Paper>
+            </Grid>
+          </Grid>
 
-            {/* Progress Bar */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">
-                  Overall Progress
-                </span>
-                <span className="text-sm font-medium text-gray-900">
-                  {Math.round(project.current_progress || 0)}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-4">
-                <div
-                  className="bg-blue-600 h-4 rounded-full transition-all duration-300"
-                  style={{ width: `${project.current_progress || 0}%` }}
-                ></div>
-              </div>
-            </div>
+          {/* Progress Bar */}
+          <Box sx={{ mb: 4 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="body2" fontWeight={500}>
+                Overall Progress
+              </Typography>
+              <Typography variant="body2" fontWeight={600}>
+                {Math.round(project.current_progress || 0)}%
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={project.current_progress || 0}
+              sx={{ height: 10, borderRadius: 1 }}
+            />
+          </Box>
 
-            {/* Project Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">
-                  Fund Source
-                </h3>
-                <p className="text-gray-900">{project.fund_source || '—'}</p>
-              </div>
+          {/* Project Details */}
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Typography variant="caption" color="text.secondary">
+                Fund Source
+              </Typography>
+              <Typography fontWeight={500}>
+                {project.fund_source || '—'}
+              </Typography>
+            </Grid>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">
-                  Mode of Implementation
-                </h3>
-                <p className="text-gray-900">
-                  {project.mode_of_implementation || '—'}
-                </p>
-              </div>
+            <Grid item xs={12} md={6}>
+              <Typography variant="caption" color="text.secondary">
+                Mode of Implementation
+              </Typography>
+              <Typography fontWeight={500}>
+                {project.mode_of_implementation || '—'}
+              </Typography>
+            </Grid>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">
-                  Project Scale
-                </h3>
-                <p className="text-gray-900">{project.project_scale || '—'}</p>
-              </div>
+            <Grid item xs={12} md={6}>
+              <Typography variant="caption" color="text.secondary">
+                Project Scale
+              </Typography>
+              <Typography fontWeight={500}>
+                {project.project_scale || '—'}
+              </Typography>
+            </Grid>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">
-                  Created
-                </h3>
-                <p className="text-gray-900">
-                  {format(new Date(project.created_at), 'MMM dd, yyyy hh:mm a')}
-                </p>
-              </div>
+            <Grid item xs={12} md={6}>
+              <Typography variant="caption" color="text.secondary">
+                Created
+              </Typography>
+              <Typography fontWeight={500}>
+                {format(new Date(project.created_at), 'MMM dd, yyyy hh:mm a')}
+              </Typography>
+            </Grid>
 
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">
-                  Last Updated
-                </h3>
-                <p className="text-gray-900">
-                  {format(new Date(project.updated_at), 'MMM dd, yyyy hh:mm a')}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+            <Grid item xs={12} md={6}>
+              <Typography variant="caption" color="text.secondary">
+                Last Updated
+              </Typography>
+              <Typography fontWeight={500}>
+                {format(new Date(project.updated_at), 'MMM dd, yyyy hh:mm a')}
+              </Typography>
+            </Grid>
+          </Grid>
+        </TabPanel>
 
         {/* Progress Tab */}
-        {activeTab === 'progress' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Progress Timeline
-              </h2>
-              <Link
-                to={`/admin/projects/${projectId}/progress`}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-              >
-                Report Progress →
-              </Link>
-            </div>
-            <div className="text-center py-12 text-gray-500">
-              <TrendingUp size={48} className="mx-auto mb-3 opacity-50" />
-              <p>Progress timeline visualization will be displayed here.</p>
-              <p className="text-sm mt-1">
-                Component implementation in progress...
-              </p>
-            </div>
-          </div>
-        )}
+        <TabPanel value="progress" current={activeTab}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h6" fontWeight={600}>
+              Progress Timeline
+            </Typography>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/admin/projects/${projectId}/progress`)}
+            >
+              Report Progress →
+            </Button>
+          </Box>
+          <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
+            <TrendingUp size={48} style={{ opacity: 0.5, marginBottom: 12 }} />
+            <Typography>Progress timeline visualization will be displayed here.</Typography>
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              Component implementation in progress...
+            </Typography>
+          </Box>
+        </TabPanel>
 
         {/* GIS Tab */}
-        {activeTab === 'gis' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">GIS Data</h2>
-              <Link
-                to={`/admin/projects/${projectId}/gis`}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-              >
-                Edit GIS Features →
-              </Link>
-            </div>
-            <div className="text-center py-12 text-gray-500">
-              <Map size={48} className="mx-auto mb-3 opacity-50" />
-              <p>GIS map and features will be displayed here.</p>
-              <p className="text-sm mt-1">
-                Component implementation in progress...
-              </p>
-            </div>
-          </div>
-        )}
+        <TabPanel value="gis" current={activeTab}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h6" fontWeight={600}>
+              GIS Data
+            </Typography>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/admin/projects/${projectId}/gis`)}
+            >
+              Edit GIS Features →
+            </Button>
+          </Box>
+          <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
+            <Map size={48} style={{ opacity: 0.5, marginBottom: 12 }} />
+            <Typography>GIS map and features will be displayed here.</Typography>
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              Component implementation in progress...
+            </Typography>
+          </Box>
+        </TabPanel>
 
         {/* Media Tab */}
-        {activeTab === 'media' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Media Gallery
-              </h2>
-            </div>
-            <div className="text-center py-12 text-gray-500">
-              <Image size={48} className="mx-auto mb-3 opacity-50" />
-              <p>Photo gallery will be displayed here.</p>
-              <p className="text-sm mt-1">
-                Component implementation in progress...
-              </p>
-            </div>
-          </div>
-        )}
+        <TabPanel value="media" current={activeTab}>
+          <Typography variant="h6" fontWeight={600} sx={{ mb: 3 }}>
+            Media Gallery
+          </Typography>
+          <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
+            <Image size={48} style={{ opacity: 0.5, marginBottom: 12 }} />
+            <Typography>Photo gallery will be displayed here.</Typography>
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              Component implementation in progress...
+            </Typography>
+          </Box>
+        </TabPanel>
 
         {/* Audit Tab */}
-        {activeTab === 'audit' && (
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              Audit Log
-            </h2>
-            <div className="text-center py-12 text-gray-500">
-              <History size={48} className="mx-auto mb-3 opacity-50" />
-              <p>Change history and audit logs will be displayed here.</p>
-              <p className="text-sm mt-1">
-                Component implementation in progress...
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
+        <TabPanel value="audit" current={activeTab}>
+          <Typography variant="h6" fontWeight={600} sx={{ mb: 3 }}>
+            Audit Log
+          </Typography>
+          <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
+            <History size={48} style={{ opacity: 0.5, marginBottom: 12 }} />
+            <Typography>Change history and audit logs will be displayed here.</Typography>
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              Component implementation in progress...
+            </Typography>
+          </Box>
+        </TabPanel>
+      </Paper>
+    </Box>
+  );
 }
