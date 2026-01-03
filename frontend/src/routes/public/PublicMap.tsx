@@ -54,7 +54,7 @@ export default function PublicMap() {
   const { data, isLoading, error } = useQuery<ProjectsResponse>({
     queryKey: ['publicProjectsMap'],
     queryFn: async () => {
-      const response = await apiClient.get('/public/projects?limit=500');
+      const response = await apiClient.get('/public/projects?limit=200');
       return response.data;
     },
   });

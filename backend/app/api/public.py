@@ -94,6 +94,17 @@ async def get_public_projects(
             ProjectProgressLog.project_id == project.project_id
         ).order_by(ProjectProgressLog.report_date.desc()).first()
 
+        # Get primary GIS feature geometry as WKT
+        geometry_wkt = None
+        gis_feature = db.query(GISFeature).filter(
+            GISFeature.project_id == project.project_id
+        ).first()
+        if gis_feature:
+            wkt_result = db.query(func.ST_AsText(GISFeature.geometry)).filter(
+                GISFeature.feature_id == gis_feature.feature_id
+            ).scalar()
+            geometry_wkt = wkt_result
+
         projects.append({
             "project_id": str(project.project_id),
             "project_title": project.project_title,
@@ -104,7 +115,8 @@ async def get_public_projects(
             "status": project.status,
             "deo_name": deo_name,
             "current_progress": float(current_progress) if current_progress else 0.0,
-            "last_updated": latest_log.report_date if latest_log else None
+            "last_updated": latest_log.report_date if latest_log else None,
+            "geometry_wkt": geometry_wkt
         })
 
     return {
