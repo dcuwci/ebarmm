@@ -1,8 +1,12 @@
 /* E-BARMM Global Styles */
 
-/* Import MapLibre CSS - must be first */
+/* Import MapLibre CSS - must be first (will be removed after migration) */
 @import 'maplibre-gl/dist/maplibre-gl.css';
 @import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
+
+/* Leaflet CSS for new map components */
+@import 'leaflet/dist/leaflet.css';
+@import 'leaflet-draw/dist/leaflet.draw.css';
 
 @tailwind base;
 @tailwind components;
