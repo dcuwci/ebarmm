@@ -42,23 +42,9 @@ async def get_public_projects(
     - limit: Max results (default 50, max 200)
     - offset: Pagination offset
     """
-    # Base query - exclude deleted projects
-    query = db.query(
-        Project,
-        DEO.deo_name,
-        ProjectProgressLog.reported_percent
-    ).join(
+    # Simple base query - just projects with DEO join
+    query = db.query(Project, DEO.deo_name).join(
         DEO, Project.deo_id == DEO.deo_id
-    ).outerjoin(
-        ProjectProgressLog,
-        and_(
-            ProjectProgressLog.project_id == Project.project_id,
-            ProjectProgressLog.progress_id.in_(
-                db.query(func.max(ProjectProgressLog.progress_id))
-                .filter(ProjectProgressLog.project_id == Project.project_id)
-                .group_by(ProjectProgressLog.project_id)
-            )
-        )
     ).filter(
         Project.status != 'deleted'
     )
@@ -80,7 +66,7 @@ async def get_public_projects(
             (Project.location.ilike(search_term))
         )
 
-    # Get total count
+    # Get total count (simpler query without complex subquery)
     total = query.count()
 
     # Get paginated results
@@ -88,11 +74,13 @@ async def get_public_projects(
 
     # Format response
     projects = []
-    for project, deo_name, current_progress in results:
-        # Get latest progress log date
+    for project, deo_name in results:
+        # Get latest progress log
         latest_log = db.query(ProjectProgressLog).filter(
             ProjectProgressLog.project_id == project.project_id
         ).order_by(ProjectProgressLog.report_date.desc()).first()
+
+        current_progress = float(latest_log.reported_percent) if latest_log else 0.0
 
         # Get primary GIS feature geometry as WKT
         geometry_wkt = None
@@ -115,7 +103,7 @@ async def get_public_projects(
             "fund_year": project.fund_year,
             "status": project.status,
             "deo_name": deo_name,
-            "current_progress": float(current_progress) if current_progress else 0.0,
+            "current_progress": current_progress,
             "last_updated": latest_log.report_date if latest_log else None,
             "geometry_wkt": geometry_wkt
         })
