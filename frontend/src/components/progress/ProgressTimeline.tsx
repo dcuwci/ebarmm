@@ -7,7 +7,6 @@ import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import {
   CheckCircle2,
-  XCircle,
   Shield,
   ShieldAlert,
   Calendar,

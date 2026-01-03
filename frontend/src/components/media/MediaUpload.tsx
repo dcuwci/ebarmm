@@ -10,7 +10,6 @@ import {
   Upload,
   X,
   CheckCircle,
-  AlertCircle,
   Image as ImageIcon,
   FileText,
   Film,
