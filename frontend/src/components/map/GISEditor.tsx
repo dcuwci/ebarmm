@@ -1,397 +1,352 @@
 /**
  * GIS Editor Component
- * Interactive map for creating and editing GIS features
- * Based on reference implementation with Leaflet-style interactions
- *
- * Note: This uses MapLibre GL + Mapbox GL Draw. For better editing UX like the reference,
- * consider adding Leaflet: npm install leaflet react-leaflet @types/leaflet
+ * MUI-based wrapper for the LeafletGISEditor with API integration
  */
 
-import { useRef, useEffect, useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import maplibregl from 'maplibre-gl'
-import MapboxDraw from '@mapbox/mapbox-gl-draw'
-import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
-import 'maplibre-gl/dist/maplibre-gl.css'
-import {
-  Pencil,
-  Trash2,
-  MapPin,
-  Minus,
-  Square,
-  Sun,
-  Moon,
-  Save,
-  X,
-} from 'lucide-react'
+import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import Box from '@mui/material/Box';
+import Paper from '@mui/material/Paper';
+import Typography from '@mui/material/Typography';
+import Alert from '@mui/material/Alert';
+import Chip from '@mui/material/Chip';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
+import IconButton from '@mui/material/IconButton';
+import Snackbar from '@mui/material/Snackbar';
+import { MapPin, Minus, Pentagon, Trash2, ArrowLeft } from 'lucide-react';
+import { LeafletGISEditor } from './LeafletGISEditor';
+import { Button, LoadingSpinner } from '../mui';
 import {
   fetchGISFeatures,
   createGISFeature,
   updateGISFeature,
   deleteGISFeature,
-} from '../../api/gis'
-import { getErrorMessage } from '../../api/client'
-import type { GISFeature, GeometryType } from '../../types/gis'
+} from '../../api/gis';
+import { geojsonToWKT, wktToGeoJSON, getGeometryType } from '../../utils/geometry';
+import type { GeometryType } from '../../types/gis';
 
 interface GISEditorProps {
-  projectId: string
+  projectId: string;
+}
+
+interface WKTResult {
+  wkt: string;
+  length: number | null;
+  area: number | null;
 }
 
 export default function GISEditor({ projectId }: GISEditorProps) {
-  const mapContainer = useRef<HTMLDivElement>(null)
-  const map = useRef<maplibregl.Map | null>(null)
-  const draw = useRef<MapboxDraw | null>(null)
-  const queryClient = useQueryClient()
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [isDarkMode, setIsDarkMode] = useState(false)
-  const [drawMode, setDrawMode] = useState<string | null>(null)
-  const [selectedFeature, setSelectedFeature] = useState<GISFeature | null>(null)
+  const [selectedFeatureId, setSelectedFeatureId] = useState<number | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
-  // Default center (Philippines/BARMM region)
-  const DEFAULT_CENTER: [number, number] = [124.2452, 6.9214]
-  const DEFAULT_ZOOM = 10
-
-  // Fetch GIS features
-  const { data, isLoading, error } = useQuery({
+  // Fetch GIS features for this project
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['gis-features', projectId],
     queryFn: () => fetchGISFeatures(projectId),
-  })
+  });
 
   // Create feature mutation
   const createMutation = useMutation({
-    mutationFn: (feature: any) => createGISFeature(projectId, feature),
+    mutationFn: (feature: { feature_type: GeometryType; geometry: GeoJSON.Geometry; properties?: Record<string, unknown> }) =>
+      createGISFeature(projectId, feature),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['gis-features', projectId] })
-      if (draw.current) {
-        draw.current.deleteAll()
-      }
-      setDrawMode(null)
+      queryClient.invalidateQueries({ queryKey: ['gis-features', projectId] });
+      setSnackbar({ open: true, message: 'Feature created successfully', severity: 'success' });
+      setEditMode(false);
     },
-  })
+    onError: () => {
+      setSnackbar({ open: true, message: 'Failed to create feature', severity: 'error' });
+    },
+  });
 
   // Update feature mutation
   const updateMutation = useMutation({
-    mutationFn: ({ featureId, updates }: { featureId: number; updates: any }) =>
+    mutationFn: ({ featureId, updates }: { featureId: number; updates: { geometry?: GeoJSON.Geometry; properties?: Record<string, unknown> } }) =>
       updateGISFeature(projectId, featureId, updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['gis-features', projectId] })
-      setSelectedFeature(null)
+      queryClient.invalidateQueries({ queryKey: ['gis-features', projectId] });
+      setSnackbar({ open: true, message: 'Feature updated successfully', severity: 'success' });
+      setEditMode(false);
+      setSelectedFeatureId(null);
     },
-  })
+    onError: () => {
+      setSnackbar({ open: true, message: 'Failed to update feature', severity: 'error' });
+    },
+  });
 
   // Delete feature mutation
   const deleteMutation = useMutation({
     mutationFn: (featureId: number) => deleteGISFeature(projectId, featureId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['gis-features', projectId] })
-      setSelectedFeature(null)
+      queryClient.invalidateQueries({ queryKey: ['gis-features', projectId] });
+      setSnackbar({ open: true, message: 'Feature deleted successfully', severity: 'success' });
+      setSelectedFeatureId(null);
     },
-  })
+    onError: () => {
+      setSnackbar({ open: true, message: 'Failed to delete feature', severity: 'error' });
+    },
+  });
 
-  // Initialize map
-  useEffect(() => {
-    if (!mapContainer.current || map.current) return
+  // Get current WKT for the selected feature or create mode
+  const currentWKT = useMemo(() => {
+    if (!selectedFeatureId || !data?.items) return undefined;
 
-    map.current = new maplibregl.Map({
-      container: mapContainer.current,
-      style: isDarkMode
-        ? 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
-        : 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-      center: DEFAULT_CENTER,
-      zoom: DEFAULT_ZOOM,
-    })
+    const feature = data.items.find((f) => f.feature_id === selectedFeatureId);
+    if (!feature?.geometry) return undefined;
 
-    // Add navigation controls
-    map.current.addControl(new maplibregl.NavigationControl(), 'top-right')
+    return geojsonToWKT(feature.geometry) || undefined;
+  }, [selectedFeatureId, data?.items]);
 
-    // Initialize Mapbox Draw
-    draw.current = new MapboxDraw({
-      displayControlsDefault: false,
-      controls: {},
-      styles: [
-        // Point
-        {
-          id: 'gl-draw-point',
-          type: 'circle',
-          filter: ['all', ['==', '$type', 'Point'], ['!=', 'mode', 'static']],
-          paint: {
-            'circle-radius': 8,
-            'circle-color': '#3b82f6',
-            'circle-stroke-color': '#fff',
-            'circle-stroke-width': 2,
-          },
-        },
-        // LineString
-        {
-          id: 'gl-draw-line',
-          type: 'line',
-          filter: ['all', ['==', '$type', 'LineString'], ['!=', 'mode', 'static']],
-          paint: {
-            'line-color': '#3b82f6',
-            'line-width': 3,
-          },
-        },
-        // Polygon fill
-        {
-          id: 'gl-draw-polygon-fill',
-          type: 'fill',
-          filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-          paint: {
-            'fill-color': '#3b82f6',
-            'fill-opacity': 0.2,
-          },
-        },
-        // Polygon outline
-        {
-          id: 'gl-draw-polygon-stroke',
-          type: 'line',
-          filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-          paint: {
-            'line-color': '#3b82f6',
-            'line-width': 2,
-          },
-        },
-        // Vertices
-        {
-          id: 'gl-draw-polygon-and-line-vertex',
-          type: 'circle',
-          filter: ['all', ['==', 'meta', 'vertex'], ['!=', 'mode', 'static']],
-          paint: {
-            'circle-radius': 6,
-            'circle-color': '#fff',
-            'circle-stroke-color': '#3b82f6',
-            'circle-stroke-width': 2,
-          },
-        },
-      ],
-    })
-
-    map.current.addControl(draw.current as any)
-
-    // Handle draw events
-    map.current.on('draw.create', handleDrawCreate)
-    map.current.on('draw.update', handleDrawUpdate)
-    map.current.on('draw.delete', handleDrawDelete)
-
-    return () => {
-      if (map.current) {
-        map.current.remove()
-        map.current = null
-      }
-    }
-  }, [])
-
-  // Update map style when dark mode changes
-  useEffect(() => {
-    if (!map.current) return
-
-    map.current.setStyle(
-      isDarkMode
-        ? 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
-        : 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
-    )
-  }, [isDarkMode])
-
-  // Load existing features onto map
-  useEffect(() => {
-    if (!map.current || !data?.items || !draw.current) return
-
-    // Clear existing features
-    draw.current.deleteAll()
-
-    // Add features to draw
-    const featureCollection = {
-      type: 'FeatureCollection' as const,
-      features: data.items.map((feature) => ({
-        type: 'Feature' as const,
-        id: feature.feature_id,
-        geometry: feature.geometry,
-        properties: feature.properties || {},
-      })),
+  // Handle save from the LeafletGISEditor
+  const handleSave = (result: WKTResult) => {
+    if (!result.wkt) {
+      setSnackbar({ open: true, message: 'No geometry to save', severity: 'error' });
+      return;
     }
 
-    draw.current.add(featureCollection as any)
-
-    // Fit bounds to features if any exist
-    if (data.items.length > 0) {
-      const bounds = new maplibregl.LngLatBounds()
-      data.items.forEach((feature) => {
-        if (feature.geometry.type === 'Point') {
-          bounds.extend(feature.geometry.coordinates as [number, number])
-        } else if (feature.geometry.type === 'LineString') {
-          feature.geometry.coordinates.forEach((coord: any) => {
-            bounds.extend(coord as [number, number])
-          })
-        } else if (feature.geometry.type === 'Polygon') {
-          feature.geometry.coordinates[0].forEach((coord: any) => {
-            bounds.extend(coord as [number, number])
-          })
-        }
-      })
-      map.current?.fitBounds(bounds, { padding: 50 })
+    const geometry = wktToGeoJSON(result.wkt);
+    if (!geometry) {
+      setSnackbar({ open: true, message: 'Invalid geometry', severity: 'error' });
+      return;
     }
-  }, [data])
 
-  // Handle draw create
-  const handleDrawCreate = (e: any) => {
-    const feature = e.features[0]
-    const geometryType = feature.geometry.type as GeometryType
+    const featureType = getGeometryType(geometry);
+    if (!featureType) {
+      setSnackbar({ open: true, message: 'Unsupported geometry type', severity: 'error' });
+      return;
+    }
 
-    createMutation.mutate({
-      feature_type: geometryType,
-      geometry: feature.geometry,
-      properties: {},
-    })
-  }
-
-  // Handle draw update
-  const handleDrawUpdate = (e: any) => {
-    const feature = e.features[0]
-    const featureId = feature.id
-
-    if (featureId && selectedFeature) {
+    if (selectedFeatureId) {
+      // Update existing feature
       updateMutation.mutate({
-        featureId: featureId,
-        updates: {
-          geometry: feature.geometry,
-        },
-      })
+        featureId: selectedFeatureId,
+        updates: { geometry },
+      });
+    } else {
+      // Create new feature
+      createMutation.mutate({
+        feature_type: featureType,
+        geometry,
+        properties: {},
+      });
     }
+  };
+
+  // Handle cancel
+  const handleCancel = () => {
+    setEditMode(false);
+    setSelectedFeatureId(null);
+  };
+
+  // Handle delete feature
+  const handleDelete = (featureId: number) => {
+    if (window.confirm('Are you sure you want to delete this feature?')) {
+      deleteMutation.mutate(featureId);
+    }
+  };
+
+  // Get icon for geometry type
+  const getGeometryIcon = (type: GeometryType) => {
+    switch (type) {
+      case 'Point':
+        return <MapPin size={18} />;
+      case 'LineString':
+        return <Minus size={18} />;
+      case 'Polygon':
+        return <Pentagon size={18} />;
+      default:
+        return <MapPin size={18} />;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <LoadingSpinner size="lg" />
+        <Typography color="text.secondary" sx={{ mt: 2 }}>
+          Loading GIS features...
+        </Typography>
+      </Box>
+    );
   }
 
-  // Handle draw delete
-  const handleDrawDelete = (e: any) => {
-    const feature = e.features[0]
-    if (feature.id) {
-      deleteMutation.mutate(feature.id)
-    }
-  }
-
-  // Start drawing mode
-  const startDrawing = (mode: 'point' | 'line' | 'polygon') => {
-    if (!draw.current) return
-
-    setDrawMode(mode)
-
-    if (mode === 'point') {
-      draw.current.changeMode('draw_point')
-    } else if (mode === 'line') {
-      draw.current.changeMode('draw_line_string')
-    } else if (mode === 'polygon') {
-      draw.current.changeMode('draw_polygon')
-    }
-  }
-
-  // Cancel drawing
-  const cancelDrawing = () => {
-    if (draw.current) {
-      draw.current.changeMode('simple_select')
-    }
-    setDrawMode(null)
+  if (error) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Error loading GIS features. Please try again.
+        </Alert>
+        <Button variant="primary" onClick={() => refetch()}>
+          Retry
+        </Button>
+      </Box>
+    );
   }
 
   return (
-    <div className="relative h-screen w-full">
-      {/* Map Container */}
-      <div ref={mapContainer} className="absolute inset-0" />
-
-      {/* Drawing Tools */}
-      <div className="absolute top-4 left-4 bg-white rounded-lg shadow-lg p-2 space-y-2">
-        <h3 className="text-sm font-semibold text-gray-700 px-2 mb-1">
-          Drawing Tools
-        </h3>
-
-        <button
-          onClick={() => startDrawing('point')}
-          className={`w-full flex items-center gap-2 px-3 py-2 rounded transition-colors ${
-            drawMode === 'point'
-              ? 'bg-blue-600 text-white'
-              : 'hover:bg-gray-100 text-gray-700'
-          }`}
-          title="Draw Point"
-        >
-          <MapPin size={18} />
-          <span className="text-sm">Point</span>
-        </button>
-
-        <button
-          onClick={() => startDrawing('line')}
-          className={`w-full flex items-center gap-2 px-3 py-2 rounded transition-colors ${
-            drawMode === 'line'
-              ? 'bg-blue-600 text-white'
-              : 'hover:bg-gray-100 text-gray-700'
-          }`}
-          title="Draw Line"
-        >
-          <Minus size={18} />
-          <span className="text-sm">Line</span>
-        </button>
-
-        <button
-          onClick={() => startDrawing('polygon')}
-          className={`w-full flex items-center gap-2 px-3 py-2 rounded transition-colors ${
-            drawMode === 'polygon'
-              ? 'bg-blue-600 text-white'
-              : 'hover:bg-gray-100 text-gray-700'
-          }`}
-          title="Draw Polygon"
-        >
-          <Square size={18} />
-          <span className="text-sm">Polygon</span>
-        </button>
-
-        {drawMode && (
-          <button
-            onClick={cancelDrawing}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded bg-red-600 text-white hover:bg-red-700 transition-colors"
-          >
-            <X size={18} />
-            <span className="text-sm">Cancel</span>
-          </button>
-        )}
-      </div>
-
-      {/* Dark Mode Toggle */}
-      <button
-        onClick={() => setIsDarkMode(!isDarkMode)}
-        className="absolute top-4 right-4 bg-white rounded-lg shadow-lg p-3 hover:bg-gray-50 transition-colors"
-        title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      {/* Sidebar */}
+      <Paper
+        elevation={0}
+        sx={{
+          width: 300,
+          borderRight: 1,
+          borderColor: 'divider',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
       >
-        {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-      </button>
+        {/* Header */}
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <IconButton size="small" onClick={() => navigate(`/admin/projects/${projectId}`)}>
+              <ArrowLeft size={20} />
+            </IconButton>
+            <Typography variant="h6" fontWeight={600}>
+              GIS Editor
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            {data?.total || 0} features
+          </Typography>
+        </Box>
 
-      {/* Status Info */}
-      <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg p-3">
-        <div className="text-xs text-gray-600">
-          <p>
-            <strong>Features:</strong> {data?.total || 0}
-          </p>
-          {drawMode && (
-            <p className="text-blue-600 mt-1">
-              <strong>Drawing:</strong> {drawMode}
-            </p>
+        {/* Actions */}
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Button
+            variant="primary"
+            fullWidth
+            onClick={() => {
+              setSelectedFeatureId(null);
+              setEditMode(true);
+            }}
+            disabled={editMode}
+          >
+            Add New Feature
+          </Button>
+        </Box>
+
+        {/* Features List */}
+        <Box sx={{ flex: 1, overflow: 'auto' }}>
+          {!data?.items.length ? (
+            <Box sx={{ p: 3, textAlign: 'center' }}>
+              <Typography color="text.secondary">
+                No features yet. Click "Add New Feature" to create one.
+              </Typography>
+            </Box>
+          ) : (
+            <List disablePadding>
+              {data.items.map((feature) => (
+                <ListItem
+                  key={feature.feature_id}
+                  disablePadding
+                  secondaryAction={
+                    <IconButton
+                      edge="end"
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(feature.feature_id);
+                      }}
+                      disabled={deleteMutation.isPending}
+                    >
+                      <Trash2 size={16} />
+                    </IconButton>
+                  }
+                >
+                  <ListItemButton
+                    selected={selectedFeatureId === feature.feature_id}
+                    onClick={() => {
+                      setSelectedFeatureId(feature.feature_id);
+                      setEditMode(true);
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 36 }}>
+                      {getGeometryIcon(feature.feature_type)}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" fontWeight={500}>
+                            Feature #{feature.feature_id}
+                          </Typography>
+                          <Chip
+                            label={feature.feature_type}
+                            size="small"
+                            variant="outlined"
+                          />
+                        </Box>
+                      }
+                      secondary={new Date(feature.created_at).toLocaleDateString()}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
           )}
-        </div>
-      </div>
+        </Box>
+      </Paper>
 
-      {/* Loading Overlay */}
-      {isLoading && (
-        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-6 text-center">
-            <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-2"></div>
-            <p className="text-gray-600">Loading map...</p>
-          </div>
-        </div>
-      )}
+      {/* Map Area */}
+      <Box sx={{ flex: 1, position: 'relative' }}>
+        {editMode ? (
+          <LeafletGISEditor
+            initialWKT={currentWKT}
+            onSave={handleSave}
+            onCancel={handleCancel}
+            height="100%"
+            editable={true}
+          />
+        ) : (
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              bgcolor: 'grey.100',
+            }}
+          >
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              Select a feature to edit or add a new one
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Use the sidebar to manage GIS features for this project
+            </Typography>
+          </Box>
+        )}
+      </Box>
 
-      {/* Error Message */}
-      {error && (
-        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-red-50 border border-red-200 rounded-lg p-4 max-w-md">
-          <p className="text-red-700">
-            Error loading GIS features. Please try again.
-          </p>
-        </div>
-      )}
-    </div>
-  )
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
 }

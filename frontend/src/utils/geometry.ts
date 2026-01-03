@@ -363,3 +363,49 @@ export const wktToCoordinates = (wkt: string): LatLngCoordinate[] | null => {
     return null;
   }
 };
+
+/**
+ * Convert GeoJSON geometry to WKT format
+ */
+export const geojsonToWKT = (geometry: GeoJSON.Geometry): string | null => {
+  if (!geometry) return null;
+
+  try {
+    return wellknown.stringify(geometry as wellknown.GeoJSONGeometry);
+  } catch (error) {
+    console.error('Error converting GeoJSON to WKT:', error);
+    return null;
+  }
+};
+
+/**
+ * Convert WKT to GeoJSON geometry
+ */
+export const wktToGeoJSON = (wkt: string): GeoJSON.Geometry | null => {
+  if (!wkt) return null;
+
+  try {
+    // Remove SRID prefix if present
+    const cleanWkt = wkt.replace(/SRID=\d+;/i, '');
+    const geojson = wellknown.parse(cleanWkt);
+    return geojson as GeoJSON.Geometry;
+  } catch (error) {
+    console.error('Error converting WKT to GeoJSON:', error);
+    return null;
+  }
+};
+
+/**
+ * Get geometry type from GeoJSON
+ */
+export const getGeometryType = (
+  geometry: GeoJSON.Geometry
+): 'Point' | 'LineString' | 'Polygon' | null => {
+  if (!geometry) return null;
+
+  if (geometry.type === 'Point') return 'Point';
+  if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') return 'LineString';
+  if (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon') return 'Polygon';
+
+  return null;
+};
