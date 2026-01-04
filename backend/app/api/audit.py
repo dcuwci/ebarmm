@@ -330,24 +330,57 @@ async def get_timeline_statistics(
 async def get_entity_audit_history(
     entity_type: str,
     entity_id: UUID,
-    current_user: User = Depends(require_role(['super_admin'])),
+    current_user: User = Depends(require_role(['super_admin', 'admin', 'deo_focal'])),
     db: Session = Depends(get_db)
 ):
     """
     Get complete audit history for a specific entity.
 
     Returns all audit log entries for the specified entity,
-    showing the complete change history.
+    showing the complete change history. For projects, also includes
+    related entity changes (GIS features, media, progress logs).
 
-    RBAC: super_admin only
+    RBAC: super_admin, admin, deo_focal (for viewing project history)
     """
-    # Query audit logs for this entity
-    results = db.query(AuditLog, User.username).outerjoin(
-        User, AuditLog.actor_id == User.user_id
-    ).filter(
-        AuditLog.entity_type == entity_type,
-        AuditLog.entity_id == entity_id
-    ).order_by(AuditLog.created_at.asc()).all()
+    entity_id_str = str(entity_id)
+
+    # For projects, also get related entities (GIS, media, progress)
+    if entity_type == "project":
+        # Query: direct project changes OR related entities with project_id in payload
+        results = db.query(AuditLog, User.username).outerjoin(
+            User, AuditLog.actor_id == User.user_id
+        ).filter(
+            or_(
+                # Direct project changes
+                and_(
+                    AuditLog.entity_type == "project",
+                    AuditLog.entity_id == entity_id
+                ),
+                # Related GIS features
+                and_(
+                    AuditLog.entity_type == "gis_feature",
+                    AuditLog.payload["project_id"].astext == entity_id_str
+                ),
+                # Related media assets
+                and_(
+                    AuditLog.entity_type == "media_asset",
+                    AuditLog.payload["project_id"].astext == entity_id_str
+                ),
+                # Related progress logs
+                and_(
+                    AuditLog.entity_type == "progress_log",
+                    AuditLog.payload["project_id"].astext == entity_id_str
+                )
+            )
+        ).order_by(AuditLog.created_at.asc()).all()
+    else:
+        # Standard query for other entity types
+        results = db.query(AuditLog, User.username).outerjoin(
+            User, AuditLog.actor_id == User.user_id
+        ).filter(
+            AuditLog.entity_type == entity_type,
+            AuditLog.entity_id == entity_id
+        ).order_by(AuditLog.created_at.asc()).all()
 
     if not results:
         return {

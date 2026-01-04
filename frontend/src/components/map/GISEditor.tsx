@@ -57,6 +57,8 @@ export default function GISEditor({ projectId }: GISEditorProps) {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['gis-features', projectId],
     queryFn: () => fetchGISFeatures(projectId),
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 
   // Create feature mutation
@@ -76,7 +78,7 @@ export default function GISEditor({ projectId }: GISEditorProps) {
   // Update feature mutation
   const updateMutation = useMutation({
     mutationFn: ({ featureId, updates }: { featureId: string; updates: { geometry?: GeoJSON.Geometry; attributes?: Record<string, unknown> } }) =>
-      updateGISFeature(projectId, featureId, updates),
+      updateGISFeature(featureId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['gis-features', projectId] });
       setSnackbar({ open: true, message: 'Feature updated successfully', severity: 'success' });
@@ -90,7 +92,7 @@ export default function GISEditor({ projectId }: GISEditorProps) {
 
   // Delete feature mutation
   const deleteMutation = useMutation({
-    mutationFn: (featureId: string) => deleteGISFeature(projectId, featureId),
+    mutationFn: (featureId: string) => deleteGISFeature(featureId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['gis-features', projectId] });
       setSnackbar({ open: true, message: 'Feature deleted successfully', severity: 'success' });
@@ -248,7 +250,7 @@ export default function GISEditor({ projectId }: GISEditorProps) {
 
         {/* Features List */}
         <Box sx={{ flex: 1, overflow: 'auto' }}>
-          {!data?.items.length ? (
+          {!data?.items?.length ? (
             <Box sx={{ p: 3, textAlign: 'center' }}>
               <Typography color="text.secondary">
                 No features yet. Click "Add New Feature" to create one.
@@ -256,7 +258,7 @@ export default function GISEditor({ projectId }: GISEditorProps) {
             </Box>
           ) : (
             <List disablePadding>
-              {data.items.map((feature) => (
+              {data?.items?.map((feature) => (
                 <ListItem
                   key={feature.feature_id}
                   disablePadding

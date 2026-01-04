@@ -71,6 +71,7 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
   // State
   const [isDrawing, setIsDrawing] = useState(false);
   const [coordinates, setCoordinates] = useState<Coordinate[]>([]);
+  const [mapReady, setMapReady] = useState(false);
 
   // Refs
   const mapRef = useRef<HTMLDivElement>(null);
@@ -90,13 +91,32 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
 
+    // Use requestAnimationFrame to ensure DOM is fully ready after navigation
+    const rafId = requestAnimationFrame(() => {
+      if (!mapRef.current || mapInstanceRef.current) return;
+
+      try {
+
     mapInstanceRef.current = L.map(mapRef.current).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
 
     const tileUrl = mode === 'dark' ? TILE_LAYERS.dark.url : TILE_LAYERS.light.url;
     const attribution = mode === 'dark' ? TILE_LAYERS.dark.attribution : TILE_LAYERS.light.attribution;
     tileLayerRef.current = L.tileLayer(tileUrl, { attribution }).addTo(mapInstanceRef.current);
 
+        // Invalidate size after delay to handle container sizing
+        setTimeout(() => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize();
+            setMapReady(true);
+          }
+        }, 100);
+      } catch (error) {
+        console.error("Error initializing map:", error);
+      }
+    });
+
     return () => {
+      cancelAnimationFrame(rafId);
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -118,7 +138,7 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
   // Load initial geometry
   // Note: parseWKTGeometry returns coordinates in [lat, lng] order (Leaflet format)
   useEffect(() => {
-    if (!initialWKT || !mapInstanceRef.current) return;
+    if (!initialWKT || !mapInstanceRef.current || !mapReady) return;
 
     const geometry = parseWKTGeometry(initialWKT);
     if (!geometry) return;
@@ -138,7 +158,7 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
     }
 
     setCoordinates(coords);
-  }, [initialWKT]);
+  }, [initialWKT, mapReady]);
 
   // Handle map click for drawing
   useEffect(() => {

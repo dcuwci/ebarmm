@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react'
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -21,14 +21,12 @@ import {
   Search,
 } from 'lucide-react';
 import { FilterButton } from './FilterButton';
-
 interface DEO {
   deo_id: number;
   deo_name: string;
   province: string;
   project_count: number;
 }
-
 interface FilterOptions {
   deos: DEO[];
   provinces: string[];
@@ -38,40 +36,29 @@ interface FilterOptions {
   modes_of_implementation: string[];
   project_scales: string[];
 }
-
 interface DashboardFilterProps {
   filterOptions: FilterOptions | null;
   filterOptionsLoading: boolean;
-
   // Filter values
   search: string;
   onSearchChange: (search: string) => void;
-
   selectedDEOs: number[];
   onDEOChange: (deoIds: number[]) => void;
-
   selectedProvinces: string[];
   onProvinceChange: (provinces: string[]) => void;
-
   selectedStatuses: string[];
   onStatusChange: (statuses: string[]) => void;
-
   selectedFundYears: number[];
   onFundYearChange: (years: number[]) => void;
-
   selectedFundSources: string[];
   onFundSourceChange: (sources: string[]) => void;
-
   selectedModes: string[];
   onModeChange: (modes: string[]) => void;
-
   selectedScales: string[];
   onScaleChange: (scales: string[]) => void;
-
   onRefresh: () => void;
   loading?: boolean;
 }
-
 export function DashboardFilter({
   filterOptions,
   filterOptionsLoading,
@@ -95,7 +82,6 @@ export function DashboardFilter({
   loading = false,
 }: DashboardFilterProps) {
   const [expanded, setExpanded] = useState(true);
-
   // Calculate active filters count
   const activeFiltersCount =
     (search ? 1 : 0) +
@@ -106,9 +92,7 @@ export function DashboardFilter({
     selectedFundSources.length +
     selectedModes.length +
     selectedScales.length;
-
   const hasActiveFilters = activeFiltersCount > 0;
-
   // Clear all filters
   const clearAllFilters = () => {
     onSearchChange('');
@@ -120,14 +104,12 @@ export function DashboardFilter({
     onModeChange([]);
     onScaleChange([]);
   };
-
   // Get DEO options as strings for FilterButton
   const deoOptions = filterOptions?.deos.map((d) => d.deo_name) || [];
   const selectedDEONames =
     filterOptions?.deos
       .filter((d) => selectedDEOs.includes(d.deo_id))
       .map((d) => d.deo_name) || [];
-
   const handleDEOChange = (names: string[]) => {
     const ids =
       filterOptions?.deos
@@ -135,15 +117,12 @@ export function DashboardFilter({
         .map((d) => d.deo_id) || [];
     onDEOChange(ids);
   };
-
   // Fund years as strings
   const fundYearOptions = filterOptions?.fund_years.map(String) || [];
   const selectedFundYearStrings = selectedFundYears.map(String);
-
   const handleFundYearChange = (years: string[]) => {
     onFundYearChange(years.map((y) => parseInt(y, 10)));
   };
-
   // Status display names
   const statusDisplayNames: Record<string, string> = {
     planning: 'Planning',
@@ -151,7 +130,6 @@ export function DashboardFilter({
     completed: 'Completed',
     suspended: 'Suspended',
   };
-
   if (filterOptionsLoading) {
     return (
       <Paper elevation={0} sx={{ p: 2, mb: 3, border: '1px solid', borderColor: 'divider' }}>
@@ -167,7 +145,6 @@ export function DashboardFilter({
       </Paper>
     );
   }
-
   return (
     <Paper elevation={0} sx={{ p: 2, mb: 3, border: '1px solid', borderColor: 'divider' }}>
       {/* Header */}
@@ -197,9 +174,11 @@ export function DashboardFilter({
             </Button>
           )}
           <Tooltip title="Refresh Data">
-            <IconButton onClick={onRefresh} disabled={loading} size="small">
-              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-            </IconButton>
+            <span>
+              <IconButton onClick={onRefresh} disabled={loading} size="small">
+                <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+              </IconButton>
+            </span>
           </Tooltip>
           <Tooltip title={expanded ? 'Collapse' : 'Expand'}>
             <IconButton onClick={() => setExpanded(!expanded)} size="small">
@@ -208,7 +187,6 @@ export function DashboardFilter({
           </Tooltip>
         </Box>
       </Box>
-
       <Collapse in={expanded}>
         {/* Search and Filter Buttons */}
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -218,18 +196,15 @@ export function DashboardFilter({
             placeholder="Search projects..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            slotProps={{
-              input: {
+            InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
                     <Search size={18} />
                   </InputAdornment>
                 ),
-              },
             }}
             sx={{ minWidth: 200 }}
           />
-
           {/* DEO Filter */}
           <FilterButton
             label="DEO"
@@ -238,7 +213,6 @@ export function DashboardFilter({
             onChange={handleDEOChange}
             disabled={loading}
           />
-
           {/* Province Filter */}
           <FilterButton
             label="Province"
@@ -247,7 +221,6 @@ export function DashboardFilter({
             onChange={onProvinceChange}
             disabled={loading}
           />
-
           {/* Status Filter */}
           <FilterButton
             label="Status"
@@ -256,7 +229,6 @@ export function DashboardFilter({
             onChange={onStatusChange}
             disabled={loading}
           />
-
           {/* Fund Year Filter */}
           <FilterButton
             label="Fund Year"
@@ -265,7 +237,6 @@ export function DashboardFilter({
             onChange={handleFundYearChange}
             disabled={loading}
           />
-
           {/* Fund Source Filter */}
           <FilterButton
             label="Fund Source"
@@ -274,7 +245,6 @@ export function DashboardFilter({
             onChange={onFundSourceChange}
             disabled={loading}
           />
-
           {/* Mode of Implementation Filter */}
           <FilterButton
             label="Implementation"
@@ -283,7 +253,6 @@ export function DashboardFilter({
             onChange={onModeChange}
             disabled={loading}
           />
-
           {/* Project Scale Filter */}
           <FilterButton
             label="Scale"
@@ -293,7 +262,6 @@ export function DashboardFilter({
             disabled={loading}
           />
         </Box>
-
         {/* Active Filters Summary */}
         {hasActiveFilters && (
           <>
