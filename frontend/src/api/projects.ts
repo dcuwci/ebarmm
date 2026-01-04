@@ -55,7 +55,7 @@ export async function updateProject(
   projectId: string,
   updates: ProjectUpdate
 ): Promise<Project> {
-  const { data } = await apiClient.put<Project>(`/projects/${projectId}`, updates)
+  const { data } = await apiClient.patch<Project>(`/projects/${projectId}`, updates)
   return data
 }
 

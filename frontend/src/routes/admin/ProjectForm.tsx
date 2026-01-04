@@ -147,7 +147,10 @@ export default function ProjectForm() {
   };
 
   // Navigate to next step
-  const handleNext = async () => {
+  const handleNext = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     // Validate current step fields before proceeding
     let fieldsToValidate: (keyof ProjectFormData)[] = [];
 
@@ -164,7 +167,9 @@ export default function ProjectForm() {
   };
 
   // Navigate to previous step
-  const handleBack = () => {
+  const handleBack = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setActiveStep((prev) => prev - 1);
   };
 
@@ -473,6 +478,7 @@ export default function ProjectForm() {
             {activeStep > 0 && (
               <Button
                 variant="secondary"
+                type="button"
                 onClick={handleBack}
                 startIcon={<ChevronLeft size={20} />}
               >
@@ -483,6 +489,7 @@ export default function ProjectForm() {
             {activeStep < STEPS.length - 1 ? (
               <Button
                 variant="primary"
+                type="button"
                 onClick={handleNext}
                 endIcon={<ChevronRight size={20} />}
               >
