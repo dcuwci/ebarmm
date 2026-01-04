@@ -118,6 +118,194 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
 ---
 
+### 2.4 GET `/auth/me`
+
+**Purpose:** Get current authenticated user information
+
+**Access:** Authenticated
+
+**Response:** `200 OK`
+```json
+{
+  "user_id": "uuid",
+  "username": "string",
+  "email": "string",
+  "role": "deo_user|regional_admin|super_admin",
+  "deo_id": 123,
+  "region": "string",
+  "first_name": "string",
+  "last_name": "string",
+  "mfa_enabled": false,
+  "is_active": true
+}
+```
+
+---
+
+### 2.5 POST `/auth/token/refresh`
+
+**Purpose:** Refresh access token using refresh token (when access token has expired)
+
+**Access:** Public (requires valid refresh token)
+
+**Request:**
+```json
+{
+  "refresh_token": "string"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "access_token": "string",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "string"
+}
+```
+
+**Errors:**
+- `401 Unauthorized`: Invalid or expired refresh token
+- `400 Bad Request`: Refresh tokens not enabled
+
+---
+
+### 2.6 MFA Endpoints
+
+#### POST `/auth/mfa/setup`
+
+**Purpose:** Initialize MFA setup for current user
+
+**Access:** Authenticated
+
+**Response:** `200 OK`
+```json
+{
+  "secret": "JBSWY3DPEHPK3PXP",
+  "qr_code": "data:image/png;base64,...",
+  "backup_codes": ["ABC123", "DEF456", ...],
+  "issuer": "E-BARMM"
+}
+```
+
+**Errors:**
+- `400 Bad Request`: MFA not enabled on server or already enabled for user
+
+---
+
+#### POST `/auth/mfa/verify-setup`
+
+**Purpose:** Complete MFA setup by verifying first TOTP code
+
+**Access:** Authenticated
+
+**Request:**
+```json
+{
+  "code": "123456"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "mfa_enabled": true,
+  "backup_codes_remaining": 10
+}
+```
+
+---
+
+#### POST `/auth/mfa/verify`
+
+**Purpose:** Verify MFA code during login flow
+
+**Access:** Public (requires mfa_session_token from login)
+
+**Request:**
+```json
+{
+  "mfa_session_token": "string",
+  "code": "123456"
+}
+```
+
+**Response:** `200 OK` (same as login response)
+```json
+{
+  "access_token": "string",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "string",
+  "user": {...},
+  "mfa_required": false
+}
+```
+
+---
+
+#### POST `/auth/mfa/disable`
+
+**Purpose:** Disable MFA for current user
+
+**Access:** Authenticated
+
+**Request:**
+```json
+{
+  "code": "123456"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "mfa_enabled": false,
+  "backup_codes_remaining": 0
+}
+```
+
+---
+
+#### GET `/auth/mfa/status`
+
+**Purpose:** Get MFA status for current user
+
+**Access:** Authenticated
+
+**Response:** `200 OK`
+```json
+{
+  "mfa_enabled": true,
+  "backup_codes_remaining": 8
+}
+```
+
+---
+
+#### POST `/auth/mfa/backup-codes/regenerate`
+
+**Purpose:** Regenerate backup codes (requires valid MFA code)
+
+**Access:** Authenticated
+
+**Request:**
+```json
+{
+  "code": "123456"
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "backup_codes": ["ABC123", "DEF456", ...]
+}
+```
+
+---
+
 ## 3. PROJECT MANAGEMENT
 
 ### 3.1 GET `/projects`
@@ -876,9 +1064,500 @@ async def get_vector_tile(
 
 ---
 
-## 7. PUBLIC API (NO AUTHENTICATION)
+## 7. USER MANAGEMENT
 
-### 7.1 GET `/public/projects`
+### 7.1 GET `/users`
+
+**Purpose:** List users with filtering and pagination
+
+**Access:** Requires `users:read` permission
+
+**Query Parameters:**
+- `skip` (int, default=0): Offset for pagination
+- `limit` (int, default=50, max=100): Number of results
+- `search` (string, optional): Search by username, email, first/last name
+- `role` (string, optional): Filter by role
+- `is_active` (bool, optional): Filter by active status
+- `include_deleted` (bool, default=false): Include soft-deleted users
+
+**Response:** `200 OK`
+```json
+{
+  "total": 150,
+  "items": [
+    {
+      "user_id": "uuid",
+      "username": "string",
+      "email": "string",
+      "role": "deo_user",
+      "deo_id": 5,
+      "region": "string",
+      "first_name": "string",
+      "last_name": "string",
+      "phone_number": "string",
+      "is_active": true,
+      "mfa_enabled": false,
+      "created_at": "2025-12-01T10:00:00Z",
+      "last_login": "2025-12-15T08:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### 7.2 POST `/users`
+
+**Purpose:** Create a new user
+
+**Access:** Requires `users:create` permission
+
+**Request:**
+```json
+{
+  "username": "string",
+  "email": "string",
+  "password": "string",
+  "role": "deo_user|regional_admin|super_admin",
+  "deo_id": 5,
+  "region": "string",
+  "first_name": "string",
+  "last_name": "string",
+  "phone_number": "string",
+  "group_ids": ["uuid", "uuid"]
+}
+```
+
+**Response:** `201 Created`
+
+**Errors:**
+- `400 Bad Request`: Username or email already exists
+
+---
+
+### 7.3 GET `/users/{user_id}`
+
+**Purpose:** Get a specific user
+
+**Access:** Requires `users:read` permission
+
+**Response:** `200 OK` (same as list item)
+
+---
+
+### 7.4 PUT `/users/{user_id}`
+
+**Purpose:** Update a user
+
+**Access:** Requires `users:update` permission
+
+**Request:**
+```json
+{
+  "email": "string",
+  "role": "string",
+  "first_name": "string",
+  "last_name": "string",
+  "phone_number": "string",
+  "is_active": true
+}
+```
+
+**Response:** `200 OK`
+
+---
+
+### 7.5 DELETE `/users/{user_id}`
+
+**Purpose:** Soft-delete a user
+
+**Access:** Requires `users:delete` permission
+
+**Response:** `204 No Content`
+
+**Note:** Cannot delete own account
+
+---
+
+### 7.6 POST `/users/{user_id}/restore`
+
+**Purpose:** Restore a soft-deleted user
+
+**Access:** Requires `users:delete` permission
+
+**Response:** `200 OK`
+
+---
+
+### 7.7 GET `/users/{user_id}/permissions`
+
+**Purpose:** Get all permissions for a user (from groups)
+
+**Access:** Requires `users:read` permission
+
+**Response:** `200 OK`
+```json
+{
+  "user_id": "uuid",
+  "permissions": {
+    "projects": { "create": true, "read": true, "update": true, "delete": false },
+    "users": { "create": false, "read": true, "update": false, "delete": false }
+  },
+  "groups": [
+    {
+      "id": "uuid",
+      "name": "Project Managers",
+      "member_count": 15
+    }
+  ]
+}
+```
+
+---
+
+### 7.8 POST `/users/{user_id}/change-password`
+
+**Purpose:** Change user password
+
+**Access:** Self (requires current password) or `users:update` permission (admin override)
+
+**Request:**
+```json
+{
+  "current_password": "string",
+  "new_password": "string"
+}
+```
+
+**Response:** `204 No Content`
+
+---
+
+### 7.9 POST `/users/{user_id}/reset-mfa`
+
+**Purpose:** Reset MFA for a user (admin only)
+
+**Access:** Requires `users:update` permission
+
+**Response:** `204 No Content`
+
+---
+
+### 7.10 GET `/users/{user_id}/groups`
+
+**Purpose:** Get all groups a user belongs to
+
+**Access:** Requires `users:read` permission
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "id": "uuid",
+    "name": "Administrators",
+    "description": "System administrators",
+    "is_active": true,
+    "member_count": 5
+  }
+]
+```
+
+---
+
+## 8. GROUP MANAGEMENT
+
+### 8.1 GET `/groups`
+
+**Purpose:** List groups with filtering and pagination
+
+**Access:** Requires `groups:read` permission
+
+**Query Parameters:**
+- `skip` (int, default=0): Offset
+- `limit` (int, default=50, max=100): Results per page
+- `search` (string, optional): Search by name
+- `is_active` (bool, optional): Filter by active status
+
+**Response:** `200 OK`
+```json
+{
+  "total": 10,
+  "items": [
+    {
+      "id": "uuid",
+      "name": "Administrators",
+      "description": "System administrators with full access",
+      "is_active": true,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-12-01T10:00:00Z",
+      "member_count": 5
+    }
+  ]
+}
+```
+
+---
+
+### 8.2 POST `/groups`
+
+**Purpose:** Create a new group
+
+**Access:** Requires `groups:create` permission
+
+**Request:**
+```json
+{
+  "name": "string",
+  "description": "string",
+  "is_active": true
+}
+```
+
+**Response:** `201 Created`
+
+**Errors:**
+- `400 Bad Request`: Group name already exists
+
+---
+
+### 8.3 GET `/groups/{group_id}`
+
+**Purpose:** Get a specific group
+
+**Access:** Requires `groups:read` permission
+
+**Response:** `200 OK` (same as list item)
+
+---
+
+### 8.4 PUT `/groups/{group_id}`
+
+**Purpose:** Update a group
+
+**Access:** Requires `groups:update` permission
+
+**Request:**
+```json
+{
+  "name": "string",
+  "description": "string",
+  "is_active": true
+}
+```
+
+**Response:** `200 OK`
+
+---
+
+### 8.5 DELETE `/groups/{group_id}`
+
+**Purpose:** Delete a group
+
+**Access:** Requires `groups:delete` permission
+
+**Response:** `204 No Content`
+
+**Errors:**
+- `400 Bad Request`: Cannot delete group with members
+
+---
+
+### 8.6 GET `/groups/{group_id}/members`
+
+**Purpose:** List all members of a group
+
+**Access:** Requires `groups:read` permission
+
+**Response:** `200 OK`
+```json
+[
+  {
+    "user_id": "uuid",
+    "username": "string",
+    "email": "string",
+    "first_name": "string",
+    "last_name": "string",
+    "role": "deo_user",
+    "joined_at": "2025-06-15T10:00:00Z"
+  }
+]
+```
+
+---
+
+### 8.7 POST `/groups/{group_id}/members`
+
+**Purpose:** Add a user to a group
+
+**Access:** Requires `groups:update` permission
+
+**Request:**
+```json
+{
+  "user_id": "uuid"
+}
+```
+
+**Response:** `201 Created`
+
+**Errors:**
+- `404 Not Found`: User not found
+- `400 Bad Request`: User already a member
+
+---
+
+### 8.8 DELETE `/groups/{group_id}/members/{user_id}`
+
+**Purpose:** Remove a user from a group
+
+**Access:** Requires `groups:update` permission
+
+**Response:** `204 No Content`
+
+---
+
+## 9. ACCESS RIGHTS MANAGEMENT
+
+### 9.1 GET `/access-rights`
+
+**Purpose:** List access rights with filtering
+
+**Access:** Requires `access_rights:read` permission
+
+**Query Parameters:**
+- `skip` (int, default=0): Offset
+- `limit` (int, default=50, max=100): Results per page
+- `resource` (string, optional): Filter by resource
+- `group_id` (uuid, optional): Filter by group
+
+**Response:** `200 OK`
+```json
+{
+  "total": 25,
+  "items": [
+    {
+      "id": "uuid",
+      "resource": "projects",
+      "permissions": {
+        "create": true,
+        "read": true,
+        "update": true,
+        "delete": false
+      },
+      "group_id": "uuid",
+      "group_name": "Project Managers",
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-12-01T10:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### 9.2 GET `/access-rights/resources`
+
+**Purpose:** List all available resources that can have permissions
+
+**Access:** Requires `access_rights:read` permission
+
+**Response:** `200 OK`
+```json
+["projects", "users", "groups", "access_rights", "audit_logs", "gis_features", "media", "progress"]
+```
+
+---
+
+### 9.3 POST `/access-rights`
+
+**Purpose:** Create a new access right (grant permissions to a group for a resource)
+
+**Access:** Requires `access_rights:create` permission
+
+**Request:**
+```json
+{
+  "resource": "projects",
+  "group_id": "uuid",
+  "permissions": {
+    "create": true,
+    "read": true,
+    "update": true,
+    "delete": false
+  }
+}
+```
+
+**Response:** `201 Created`
+
+**Errors:**
+- `400 Bad Request`: Invalid resource or access right already exists
+- `404 Not Found`: Group not found
+
+---
+
+### 9.4 GET `/access-rights/{access_right_id}`
+
+**Purpose:** Get a specific access right
+
+**Access:** Requires `access_rights:read` permission
+
+**Response:** `200 OK` (same as list item)
+
+---
+
+### 9.5 PUT `/access-rights/{access_right_id}`
+
+**Purpose:** Update access right permissions
+
+**Access:** Requires `access_rights:update` permission
+
+**Request:**
+```json
+{
+  "permissions": {
+    "create": true,
+    "read": true,
+    "update": true,
+    "delete": true
+  }
+}
+```
+
+**Response:** `200 OK`
+
+---
+
+### 9.6 DELETE `/access-rights/{access_right_id}`
+
+**Purpose:** Delete an access right
+
+**Access:** Requires `access_rights:delete` permission
+
+**Response:** `204 No Content`
+
+---
+
+### 9.7 GET `/access-rights/check/{resource}/{action}`
+
+**Purpose:** Check if current user has a specific permission
+
+**Access:** Authenticated
+
+**Response:** `200 OK`
+```json
+{
+  "resource": "projects",
+  "action": "create",
+  "allowed": true
+}
+```
+
+---
+
+## 10. PUBLIC API (NO AUTHENTICATION)
+
+### 10.1 GET `/public/projects`
 
 **Purpose:** Public transparency portal data
 
@@ -915,7 +1594,7 @@ async def get_vector_tile(
 
 ---
 
-### 7.2 GET `/public/map`
+### 10.2 GET `/public/map`
 
 **Purpose:** Public map view with GIS features
 
@@ -925,7 +1604,7 @@ async def get_vector_tile(
 
 ---
 
-### 7.3 GET `/public/stats`
+### 10.3 GET `/public/stats`
 
 **Purpose:** Dashboard statistics
 
@@ -951,9 +1630,9 @@ async def get_vector_tile(
 
 ---
 
-## 8. REPORTING ENDPOINTS
+## 11. REPORTING ENDPOINTS
 
-### 8.1 GET `/reports/project-summary`
+### 11.1 GET `/reports/project-summary`
 
 **Purpose:** Generate project summary report
 
@@ -968,7 +1647,7 @@ async def get_vector_tile(
 
 ---
 
-### 8.2 GET `/reports/progress-timeline/{project_id}`
+### 11.2 GET `/reports/progress-timeline/{project_id}`
 
 **Purpose:** Export progress timeline
 
@@ -983,9 +1662,9 @@ report_date,reported_percent,remarks,reported_by
 
 ---
 
-## 9. AUDIT LOGS
+## 12. AUDIT LOGS
 
-### 9.1 GET `/audit/logs`
+### 12.1 GET `/audit/logs`
 
 **Purpose:** Query audit trail
 
@@ -1019,7 +1698,7 @@ report_date,reported_percent,remarks,reported_by
 
 ---
 
-## 10. ERROR RESPONSE FORMAT
+## 13. ERROR RESPONSE FORMAT
 
 All errors follow RFC 7807:
 ```json
@@ -1040,7 +1719,7 @@ All errors follow RFC 7807:
 
 ---
 
-## 11. RATE LIMITING
+## 14. RATE LIMITING
 
 **Public endpoints:**
 - 100 requests/minute per IP
@@ -1053,7 +1732,7 @@ All errors follow RFC 7807:
 
 ---
 
-## 12. API VERSIONING
+## 15. API VERSIONING
 
 **Current:** v1
 

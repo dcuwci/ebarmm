@@ -1,6 +1,6 @@
 # React Frontend Design
 
-> **Note:** This document describes the frontend architecture. As of 2026-01-03, all core frontend CRUD pages are implemented using Material-UI (MUI) and Leaflet for GIS editing.
+> **Note:** This document describes the frontend architecture. As of 2026-01-04, all core frontend CRUD pages are implemented using Material-UI (MUI) and Leaflet for GIS editing. Settings pages for User Management, Groups, Access Rights, and Audit Logs are also implemented. MFA (Multi-Factor Authentication) is supported via the MFASetupWizard component.
 
 ## 1. APPLICATION ARCHITECTURE
 
@@ -40,14 +40,23 @@ frontend/
 │   ├── App.tsx
 │   ├── routes/
 │   │   ├── public/
+│   │   │   ├── Landing.tsx
 │   │   │   ├── PublicPortal.tsx
 │   │   │   ├── PublicMap.tsx
 │   │   │   └── ProjectDetails.tsx
 │   │   ├── admin/
 │   │   │   ├── Dashboard.tsx
 │   │   │   ├── ProjectList.tsx
+│   │   │   ├── ProjectDetail.tsx
 │   │   │   ├── ProjectForm.tsx
-│   │   │   └── GISEditor.tsx
+│   │   │   ├── GISEditor.tsx
+│   │   │   ├── ProgressReport.tsx
+│   │   │   ├── Profile.tsx
+│   │   │   └── settings/
+│   │   │       ├── UsersSettings.tsx
+│   │   │       ├── GroupsSettings.tsx
+│   │   │       ├── AccessRightsSettings.tsx
+│   │   │       └── AuditLogs.tsx
 │   │   └── auth/
 │   │       └── Login.tsx
 │   ├── components/
@@ -56,6 +65,8 @@ frontend/
 │   │   │   ├── Input.tsx
 │   │   │   ├── Modal.tsx
 │   │   │   └── Table.tsx
+│   │   ├── auth/
+│   │   │   └── MFASetupWizard.tsx
 │   │   ├── map/
 │   │   │   ├── MapView.tsx
 │   │   │   ├── DrawControl.tsx
@@ -64,7 +75,13 @@ frontend/
 │   │   │   ├── ProgressTimeline.tsx
 │   │   │   ├── MediaGallery.tsx
 │   │   │   └── ProjectCard.tsx
+│   │   ├── media/
+│   │   │   ├── MediaGallery.tsx
+│   │   │   └── MediaUpload.tsx
+│   │   ├── progress/
+│   │   │   └── ProgressTimeline.tsx
 │   │   └── layout/
+│   │       ├── AdminLayout.tsx
 │   │       ├── Header.tsx
 │   │       ├── Sidebar.tsx
 │   │       └── ProtectedRoute.tsx
@@ -166,6 +183,26 @@ export const router = createBrowserRouter([
       {
         path: 'projects/:projectId/progress',
         element: <ProgressReport />
+      },
+      {
+        path: 'profile',
+        element: <Profile />
+      },
+      {
+        path: 'settings/users',
+        element: <UsersSettings />
+      },
+      {
+        path: 'settings/groups',
+        element: <GroupsSettings />
+      },
+      {
+        path: 'settings/access-rights',
+        element: <AccessRightsSettings />
+      },
+      {
+        path: 'settings/audit-logs',
+        element: <AuditLogs />
       }
     ]
   }
@@ -958,6 +995,227 @@ export default function MediaUpload({ projectId }: { projectId: string }) {
   );
 }
 ```
+
+---
+
+### 3.7 User Profile (`Profile.tsx`)
+
+**Purpose:** User profile and account settings
+
+**Features:**
+- View/edit personal information
+- Change password
+- MFA setup/disable
+- View active sessions
+
+**Layout:**
+```typescript
+import { useAuth } from '@/hooks/useAuth';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { authAPI } from '@/api/auth';
+import MFASetupWizard from '@/components/auth/MFASetupWizard';
+
+export default function Profile() {
+  const { user } = useAuth();
+  const { data: mfaStatus } = useQuery({
+    queryKey: ['mfa-status'],
+    queryFn: authAPI.getMFAStatus
+  });
+
+  return (
+    <div className="p-8 max-w-4xl mx-auto">
+      <h1 className="text-3xl font-bold mb-8">Profile Settings</h1>
+
+      {/* Personal Information */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Personal Information</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ProfileForm user={user} />
+        </CardContent>
+      </Card>
+
+      {/* Change Password */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Change Password</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PasswordChangeForm />
+        </CardContent>
+      </Card>
+
+      {/* MFA Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Two-Factor Authentication</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {mfaStatus?.mfa_enabled ? (
+            <MFADisableSection backupCodesRemaining={mfaStatus.backup_codes_remaining} />
+          ) : (
+            <MFASetupWizard />
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+```
+
+---
+
+### 3.8 MFA Setup Wizard (`MFASetupWizard.tsx`)
+
+**Purpose:** Step-by-step MFA setup process
+
+**Features:**
+- QR code display for authenticator apps
+- Manual secret key entry option
+- Verification code input
+- Backup codes display and download
+
+**Implementation:**
+```typescript
+import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { authAPI } from '@/api/auth';
+
+export default function MFASetupWizard() {
+  const [step, setStep] = useState(0);
+  const [setupData, setSetupData] = useState<MFASetupData | null>(null);
+
+  const setupMutation = useMutation({
+    mutationFn: authAPI.setupMFA,
+    onSuccess: (data) => {
+      setSetupData(data);
+      setStep(1);
+    }
+  });
+
+  const verifyMutation = useMutation({
+    mutationFn: authAPI.verifyMFASetup,
+    onSuccess: () => {
+      setStep(2);
+    }
+  });
+
+  return (
+    <Stepper activeStep={step}>
+      {/* Step 0: Introduction */}
+      <Step>
+        <StepLabel>Get Started</StepLabel>
+        <StepContent>
+          <p>Secure your account with two-factor authentication.</p>
+          <Button onClick={() => setupMutation.mutate()}>
+            Enable 2FA
+          </Button>
+        </StepContent>
+      </Step>
+
+      {/* Step 1: Scan QR Code */}
+      <Step>
+        <StepLabel>Scan QR Code</StepLabel>
+        <StepContent>
+          <img src={setupData?.qr_code} alt="QR Code" />
+          <p>Or enter manually: {setupData?.secret}</p>
+          <TextField
+            label="Enter 6-digit code"
+            onSubmit={(code) => verifyMutation.mutate({ code })}
+          />
+        </StepContent>
+      </Step>
+
+      {/* Step 2: Save Backup Codes */}
+      <Step>
+        <StepLabel>Save Backup Codes</StepLabel>
+        <StepContent>
+          <Alert severity="warning">
+            Save these backup codes in a secure location.
+          </Alert>
+          <BackupCodesList codes={setupData?.backup_codes} />
+          <Button onClick={downloadBackupCodes}>Download</Button>
+        </StepContent>
+      </Step>
+    </Stepper>
+  );
+}
+```
+
+---
+
+### 3.9 Settings Pages
+
+#### Users Settings (`UsersSettings.tsx`)
+
+**Purpose:** User management interface
+
+**Features:**
+- List all users with search/filter
+- Create new users
+- Edit user details
+- Activate/deactivate users
+- Reset user passwords
+- Reset user MFA
+
+**Layout:**
+```typescript
+export default function UsersSettings() {
+  const { data: users, isLoading } = useQuery({
+    queryKey: ['users'],
+    queryFn: usersAPI.getUsers
+  });
+
+  return (
+    <div className="p-8">
+      <div className="flex justify-between mb-6">
+        <h1 className="text-2xl font-bold">User Management</h1>
+        <Button onClick={openCreateDialog}>Add User</Button>
+      </div>
+
+      <DataTable
+        columns={userColumns}
+        data={users?.items}
+        searchable
+        filterable
+      />
+
+      <UserFormDialog />
+    </div>
+  );
+}
+```
+
+#### Groups Settings (`GroupsSettings.tsx`)
+
+**Purpose:** Group/role management
+
+**Features:**
+- List all groups
+- Create/edit/delete groups
+- Manage group members
+- View group permissions
+
+#### Access Rights Settings (`AccessRightsSettings.tsx`)
+
+**Purpose:** Permission management
+
+**Features:**
+- Matrix view of group permissions per resource
+- Quick toggle permissions on/off
+- Create new permission assignments
+- Visual indication of permission inheritance
+
+#### Audit Logs (`AuditLogs.tsx`)
+
+**Purpose:** System audit trail viewer
+
+**Features:**
+- Filterable log viewer (by user, action, date range)
+- Export logs to CSV
+- Detailed log entry view
+- Per-project audit log filtering
 
 ---
 
