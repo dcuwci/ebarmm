@@ -64,6 +64,24 @@ services:
       timeout: 5s
       retries: 5
 
+  # MinIO bucket setup (one-time initialization)
+  minio-setup:
+    image: minio/mc:latest
+    container_name: ebarmm-minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - ebarmm-network
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb myminio/ebarmm-media --ignore-existing;
+      mc anonymous set download myminio/ebarmm-media;
+      echo 'MinIO bucket setup complete';
+      exit 0;
+      "
+
   # FastAPI Backend
   backend:
     build:
@@ -71,16 +89,15 @@ services:
       dockerfile: Dockerfile
     container_name: ebarmm-backend
     environment:
-      DATABASE_URL: postgresql+psycopg://ebarmm_app:${DB_PASSWORD:-change_this_password}@postgres:5432/ebarmm
+      DATABASE_URL: postgresql+psycopg://ebarmm_app:${DB_PASSWORD:-DevPassword123}@postgres:5432/ebarmm
       REDIS_URL: redis://redis:6379/0
       S3_ENDPOINT: http://minio:9000
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
       S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
       S3_BUCKET: ebarmm-media
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-super-secret-key-change-this}
-      CORS_ORIGINS: '["http://localhost:3000","https://ebarmm.gov.ph"]'
-    volumes:
-      - ../backend:/app
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-key-change-in-production-min-32-chars}
+      CORS_ORIGINS: '["*"]'
+      DEBUG: "True"
     ports:
       - "8000:8000"
     networks:
@@ -92,26 +109,21 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-  # React Frontend
+  # React Frontend (production build served by nginx)
   frontend:
     build:
       context: ../frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
     container_name: ebarmm-frontend
-    environment:
-      VITE_API_BASE_URL: http://localhost:8000/api/v1
-    volumes:
-      - ../frontend:/app
-      - /app/node_modules
     ports:
-      - "3000:3000"
+      - "3000:80"
     networks:
       - ebarmm-network
     depends_on:
       - backend
-    command: npm run dev
 
   # Nginx (production proxy)
   nginx:
