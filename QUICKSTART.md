@@ -1,377 +1,376 @@
-# E-BARMM Quick Start Guide
+# E-BARMM Setup Guide
 
-**Updated:** 2026-01-03
-
-This guide will get you up and running in ~5 minutes!
+Complete setup instructions for development and production.
 
 ---
 
-## 📋 Prerequisites
+## Quick Start (5 Minutes)
+
+Get the system running locally for development.
+
+### Prerequisites
 
 - **Docker Desktop** (for PostgreSQL, Redis, MinIO)
 - **Python 3.11+** (for backend)
 - **Node.js 18+** (for frontend)
-- **Git Bash or PowerShell** (Windows)
 
----
-
-## 🚀 Step-by-Step Setup
-
-### Step 1: Start Infrastructure (PostgreSQL, Redis, MinIO)
-
-Open **Git Bash** or **PowerShell** in the project root:
+### Step 1: Start Infrastructure
 
 ```bash
-# Navigate to docker directory
 cd docker
-
-# Start infrastructure services
 docker-compose -f docker-compose.infrastructure.yml up -d
 
-# Wait for services to be ready (~30 seconds)
-# Check status:
+# Wait ~30 seconds, then verify
 docker-compose -f docker-compose.infrastructure.yml ps
 ```
 
-**What this does:**
-- ✅ Starts PostgreSQL with PostGIS on port 5432
-- ✅ Automatically creates database and runs migrations
-- ✅ Starts Redis on port 6379
-- ✅ Starts MinIO on ports 9000 (API) and 9001 (Console)
-- ✅ Creates and configures the `ebarmm-media` bucket
+This starts:
+- PostgreSQL + PostGIS (port 5432)
+- Redis (port 6379)
+- MinIO (ports 9000, 9001)
 
-**Verify it's working:**
-```bash
-# Check PostgreSQL
-docker exec ebarmm-postgres psql -U ebarmm_app -d ebarmm -c "SELECT COUNT(*) FROM users;"
-
-# Check MinIO
-curl http://localhost:9000/minio/health/live
-
-# Check Redis
-docker exec ebarmm-redis redis-cli ping
-```
-
----
-
-### Step 2: Start Backend API
-
-Open a **NEW terminal** in the project root:
+### Step 2: Start Backend
 
 ```bash
-# Activate virtual environment (venv is in project root)
-source .venv/Scripts/activate
-# Or on Windows CMD: .venv\Scripts\activate.bat
-# Or on PowerShell: .venv\Scripts\Activate.ps1
+# Activate virtual environment
+source .venv/Scripts/activate  # Windows Git Bash
+# .venv\Scripts\Activate.ps1   # PowerShell
+# .venv\Scripts\activate.bat   # CMD
 
-# Navigate to backend
 cd backend
-
-# Install dependencies (first time only)
-pip install -r requirements.txt
-
-# Start the backend server
+pip install -r requirements.txt  # First time only
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**Backend will start at:** http://localhost:8000
-
-**Verify it's working:**
-- API Docs: http://localhost:8000/docs
-- Health Check: http://localhost:8000/health
-
-**Default Login Credentials:**
-- Username: `admin`
-- Password: `Admin@2026`
-
----
-
 ### Step 3: Start Frontend
 
-Open **ANOTHER new terminal** in the project root:
-
 ```bash
-# Navigate to frontend
 cd frontend
-
-# Install dependencies (first time only)
-npm install
-
-# Start the development server
+npm install  # First time only
 npm run dev
 ```
 
-**Frontend will start at:** http://localhost:5173
-
-**Open in browser:** http://localhost:5173
-
----
-
-## 🎯 Quick Access URLs
+### Access
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| **Frontend** | http://localhost:5173 | - |
-| **Backend API** | http://localhost:8000 | - |
-| **API Documentation** | http://localhost:8000/docs | - |
-| **MinIO Console** | http://localhost:9001 | minioadmin / minioadmin |
-| **PostgreSQL** | localhost:5432 | ebarmm_app / DevPassword123 |
+| Frontend | http://localhost:5173 | - |
+| Backend API | http://localhost:8000/docs | - |
+| MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
+
+### Default Users
+
+| Username | Password | Role |
+|----------|----------|------|
+| admin | Admin@2026 | super_admin |
+| deo_user_1 | Deo@2026 | deo_user |
+| regional_admin | Regional@2026 | regional_admin |
 
 ---
 
-## 🔍 Troubleshooting
+## Full Docker Deployment
 
-### Backend won't start - "Database connection error"
+Run everything in Docker (no local Python/Node required).
 
-**Problem:** PostgreSQL not ready yet
-
-**Solution:**
 ```bash
-# Check if PostgreSQL is running
-docker ps | grep ebarmm-postgres
+cd docker
+cp .env.example .env
+# Edit .env with your secrets
 
-# View PostgreSQL logs
+docker-compose up -d
+```
+
+Access:
+- Frontend: http://localhost:3000
+- Backend: http://localhost:8000/docs
+- MinIO: http://localhost:9001
+
+---
+
+## Manual Setup (Without Docker)
+
+### Database
+
+```bash
+# Install PostgreSQL 15+ with PostGIS
+sudo apt install postgresql-15 postgresql-15-postgis-3
+
+# Create database
+sudo -u postgres psql
+CREATE DATABASE ebarmm;
+\c ebarmm
+CREATE EXTENSION postgis;
+CREATE EXTENSION postgis_topology;
+CREATE EXTENSION pgcrypto;
+CREATE USER ebarmm_app WITH PASSWORD 'your_password';
+GRANT ALL PRIVILEGES ON DATABASE ebarmm TO ebarmm_app;
+\q
+
+# Run schema
+psql -U ebarmm_app -d ebarmm -f database/01_create_tables.sql
+psql -U ebarmm_app -d ebarmm -f database/02_create_triggers.sql
+psql -U ebarmm_app -d ebarmm -f database/03_seed_data.sql
+psql -U ebarmm_app -d ebarmm -f database/04_user_management.sql
+```
+
+### Backend
+
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with database credentials
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+echo "VITE_API_BASE_URL=http://localhost:8000/api/v1" > .env.local
+npm run dev
+```
+
+### MinIO
+
+```bash
+wget https://dl.min.io/server/minio/release/linux-amd64/minio
+chmod +x minio && sudo mv minio /usr/local/bin/
+mkdir -p ~/minio-data
+minio server ~/minio-data --console-address ":9001"
+
+# Create bucket (new terminal)
+mc alias set local http://localhost:9000 minioadmin minioadmin
+mc mb local/ebarmm-media
+mc anonymous set download local/ebarmm-media
+```
+
+### Redis
+
+```bash
+sudo apt install redis-server
+sudo systemctl start redis
+sudo systemctl enable redis
+```
+
+---
+
+## Production Deployment
+
+### Docker Compose (Recommended)
+
+```bash
+cd docker
+cp .env.example .env
+# Set strong JWT_SECRET_KEY, DB_PASSWORD, CORS_ORIGINS
+
+docker-compose --profile production up -d
+```
+
+### Nginx Configuration
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name ebarmm.gov.ph;
+
+    ssl_certificate /etc/letsencrypt/live/ebarmm.gov.ph/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ebarmm.gov.ph/privkey.pem;
+
+    location / {
+        root /var/www/ebarmm/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name ebarmm.gov.ph;
+    return 301 https://$server_name$request_uri;
+}
+```
+
+### Systemd Service
+
+```ini
+# /etc/systemd/system/ebarmm-backend.service
+[Unit]
+Description=E-BARMM Backend API
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=ebarmm
+WorkingDirectory=/opt/ebarmm/backend
+Environment="PATH=/opt/ebarmm/backend/venv/bin"
+ExecStart=/opt/ebarmm/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable ebarmm-backend
+sudo systemctl start ebarmm-backend
+```
+
+---
+
+## Development Workflow
+
+### Backend
+
+```bash
+cd backend
+source venv/bin/activate
+uvicorn app.main:app --reload  # Auto-reloads on save
+
+# Linting
+black app/
+flake8 app/
+
+# Tests
+pytest
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm run dev      # Hot reload
+npm run lint     # ESLint
+npm run format   # Prettier
+npm run build    # Production build
+```
+
+### Database
+
+```bash
+# Connect
+docker exec -it ebarmm-postgres psql -U ebarmm_app -d ebarmm
+
+# Backup
+docker exec ebarmm-postgres pg_dump -U ebarmm_app ebarmm > backup.sql
+
+# Restore
+docker exec -i ebarmm-postgres psql -U ebarmm_app -d ebarmm < backup.sql
+```
+
+---
+
+## Troubleshooting
+
+### Database Connection Error
+
+```bash
+# Check PostgreSQL running
+docker ps | grep ebarmm-postgres
 docker logs ebarmm-postgres
 
-# Wait for initialization
+# Test connection
 docker exec ebarmm-postgres psql -U ebarmm_app -d ebarmm -c "SELECT version();"
 ```
 
-### Frontend shows "Network Error"
+### Frontend Network Error
 
-**Problem:** Backend not running or wrong API URL
+1. Check backend: `curl http://localhost:8000/health`
+2. Verify `frontend/.env.local`: `VITE_API_BASE_URL=http://localhost:8000/api/v1`
+3. Check browser console for CORS errors
 
-**Solution:**
-1. Check backend is running: `curl http://localhost:8000/health`
-2. Verify `frontend/.env.local` has: `VITE_API_BASE_URL=http://localhost:8000/api/v1`
-3. Restart frontend: `npm run dev`
+### Port Already in Use
 
-### Port already in use
-
-**Problem:** Port 5432, 8000, 5173, 9000, or 6379 already used
-
-**Solution:**
 ```bash
-# Check what's using the port (PowerShell)
-netstat -ano | findstr :8000
+# Find process using port
+netstat -ano | findstr :8000  # Windows
+lsof -i :8000                 # Linux/Mac
 
-# Or stop the conflicting service
-# For Docker services:
+# Stop Docker services
 docker-compose -f docker-compose.infrastructure.yml down
 ```
 
-### Cannot activate virtual environment
+### Database Tables Missing
 
-**Problem:** Wrong activation command
-
-**Solution:**
 ```bash
-# Git Bash
-source .venv/Scripts/activate
-
-# PowerShell
-.venv\Scripts\Activate.ps1
-
-# CMD
-.venv\Scripts\activate.bat
-```
-
-### Database tables not created
-
-**Problem:** Initialization scripts didn't run
-
-**Solution:**
-```bash
-# Stop containers
 cd docker
 docker-compose -f docker-compose.infrastructure.yml down -v
-
-# Remove volumes (WARNING: deletes all data)
 docker volume rm docker_postgres-data
-
-# Start again (will re-initialize)
 docker-compose -f docker-compose.infrastructure.yml up -d
+```
 
-# Wait and check
-docker exec ebarmm-postgres psql -U ebarmm_app -d ebarmm -c "\dt"
+### MinIO Access Denied
+
+```bash
+mc policy get local/ebarmm-media
+mc anonymous set download local/ebarmm-media
 ```
 
 ---
 
-## 🛑 Stopping Services
-
-### Stop Backend & Frontend
-Just press `Ctrl+C` in each terminal
-
-### Stop Infrastructure
-```bash
-cd docker
-docker-compose -f docker-compose.infrastructure.yml down
-```
-
-### Stop Everything and Remove Data
-```bash
-cd docker
-docker-compose -f docker-compose.infrastructure.yml down -v
-```
-
----
-
-## 📊 Next Steps
-
-1. **Explore the API:** http://localhost:8000/docs
-2. **Login to Frontend:** Use `admin` / `Admin@2026`
-3. **Create a Project:** Navigate to Projects → New Project
-4. **Upload Media:** Add photos with GPS tags
-5. **Edit GIS Features:** Use the map editor
-6. **View Progress Timeline:** Add progress logs
-
----
-
-## 🎨 Development Workflow
-
-### Making Backend Changes
-
-Backend auto-reloads when you save files (thanks to `--reload` flag)
+## Health Checks
 
 ```bash
-# Edit files in backend/app/
-# Save
-# Backend automatically restarts
-```
+# Backend
+curl http://localhost:8000/health
 
-### Making Frontend Changes
+# Database
+docker exec ebarmm-postgres psql -U ebarmm_app -d ebarmm -c "SELECT COUNT(*) FROM projects;"
 
-Frontend hot-reloads automatically
+# Redis
+docker exec ebarmm-redis redis-cli ping
 
-```bash
-# Edit files in frontend/src/
-# Save
-# Browser automatically updates
-```
-
-### Database Changes
-
-```bash
-# Connect to database
-docker exec -it ebarmm-postgres psql -U ebarmm_app -d ebarmm
-
-# Run SQL
-SELECT * FROM projects;
-
-# Exit
-\q
+# MinIO
+curl http://localhost:9000/minio/health/live
 ```
 
 ---
 
-## 📦 Installing New Dependencies
+## Security Checklist (Production)
 
-### Backend (Python)
-```bash
-# Activate venv
-source .venv/Scripts/activate
-
-# Install package
-pip install package-name
-
-# Update requirements
-pip freeze > backend/requirements.txt
-```
-
-### Frontend (Node.js)
-```bash
-cd frontend
-npm install package-name
-```
+- [ ] Change all default passwords
+- [ ] Set strong JWT_SECRET_KEY (min 32 chars)
+- [ ] Enable HTTPS with valid SSL certificate
+- [ ] Configure CORS to your domain only
+- [ ] Set up firewall (allow only 80, 443)
+- [ ] Disable DEBUG mode
+- [ ] Set up automated backups
+- [ ] Enable audit logging
+- [ ] Configure rate limiting
+- [ ] Set up monitoring and alerting
 
 ---
 
-## 🔐 Default User Accounts
-
-From seed data (`database/03_seed_data.sql`):
-
-| Username | Password | Role | Access |
-|----------|----------|------|--------|
-| admin | Admin@2026 | super_admin | Full system access |
-| deo_user_1 | Deo@2026 | deo_user | DEO 1 projects only |
-| deo_user_2 | Deo@2026 | deo_user | DEO 2 projects only |
-| regional_admin | Regional@2026 | regional_admin | Regional oversight |
-
-**⚠️ IMPORTANT:** Change these passwords before deploying to production!
-
----
-
-## 📝 Common Commands Cheat Sheet
+## Stopping Services
 
 ```bash
-# === Infrastructure ===
-# Start
-cd docker && docker-compose -f docker-compose.infrastructure.yml up -d
+# Stop backend/frontend: Ctrl+C
 
-# Stop
+# Stop infrastructure
 cd docker && docker-compose -f docker-compose.infrastructure.yml down
 
-# View logs
-docker-compose -f docker-compose.infrastructure.yml logs -f postgres
-
-# === Backend ===
-# Activate venv
-source .venv/Scripts/activate
-
-# Start backend
-cd backend && uvicorn app.main:app --reload
-
-# === Frontend ===
-# Start frontend
-cd frontend && npm run dev
-
-# Build for production
-cd frontend && npm run build
-
-# === Database ===
-# Connect to DB
-docker exec -it ebarmm-postgres psql -U ebarmm_app -d ebarmm
-
-# Backup database
-docker exec ebarmm-postgres pg_dump -U ebarmm_app ebarmm > backup.sql
-
-# Restore database
-docker exec -i ebarmm-postgres psql -U ebarmm_app -d ebarmm < backup.sql
-
-# === MinIO ===
-# Access console
-# Open http://localhost:9001
-# Login: minioadmin / minioadmin
+# Stop and remove data
+cd docker && docker-compose -f docker-compose.infrastructure.yml down -v
 ```
 
 ---
 
-## ✅ Verification Checklist
+## Documentation
 
-After starting everything, verify:
-
-- [ ] PostgreSQL running: `docker ps | grep ebarmm-postgres`
-- [ ] Database has tables: `docker exec ebarmm-postgres psql -U ebarmm_app -d ebarmm -c "\dt"`
-- [ ] MinIO running: `curl http://localhost:9000/minio/health/live`
-- [ ] Redis running: `docker exec ebarmm-redis redis-cli ping`
-- [ ] Backend health: `curl http://localhost:8000/health`
-- [ ] Backend API docs: Open http://localhost:8000/docs
-- [ ] Frontend loads: Open http://localhost:5173
-- [ ] Can login: Try `admin` / `Admin@2026`
-
----
-
-## 🎉 You're Ready!
-
-The E-BARMM Transparency Portal is now running!
-
-- **Public Portal:** http://localhost:5173
-- **Admin Dashboard:** http://localhost:5173 (login first)
-- **API Documentation:** http://localhost:8000/docs
-
-For more information, see:
 - `README.md` - Project overview
-- `SETUP.md` - Detailed setup instructions
-- `ARCHITECTURE.md` - System architecture
+- `CLAUDE.md` - AI assistant guidance
+- `SYSTEM_REFERENCE.md` - Database schema & file structure
+- `ARCHITECTURE.md` - System design
 - `API_DESIGN.md` - API specifications
+- `SECURITY.md` - Authentication & RBAC

@@ -13,6 +13,9 @@ COPY package*.json ./
 RUN npm install
 
 COPY . .
+
+# Increase Node.js heap for builds on memory-constrained systems
+ENV NODE_OPTIONS="--max-old-space-size=1536"
 RUN npm run build
 
 # Production stage
