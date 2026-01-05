@@ -54,3 +54,6 @@ htmlcov/
 *.tmp
 *.temp
 .cache/
+
+# Project references (PDFs, local docs)
+references/
