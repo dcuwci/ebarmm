@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+venv/
+.venv/
+env/
+.env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# Vite
+.vite/
+
+# Local env files (keep .env.example)
+# Uncomment these for production repos:
+# .env
+# .env.local
+# .env.*.local
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
