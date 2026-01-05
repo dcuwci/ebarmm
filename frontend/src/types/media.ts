@@ -1,31 +1,37 @@
 /**
- * Media Asset types
+ * Media Asset types - matching backend schemas
  */
 
+export type MediaType = 'photo' | 'video' | 'document'
+
 export interface MediaAsset {
-  media_id: number
+  media_id: string
   project_id: string
   media_type: MediaType
-  file_name: string
-  file_path: string
-  file_size: number
-  mime_type: string
-  gps_latitude?: number
-  gps_longitude?: number
-  caption?: string
+  storage_key: string
+  download_url?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  captured_at?: string | null
   uploaded_by: string
   uploaded_at: string
+  attributes?: Record<string, unknown> | null
+  file_size?: number | null
+  mime_type?: string | null
 }
 
-export type MediaType = 'photo' | 'video' | 'document' | 'other'
+export interface MediaUploadRequest {
+  project_id: string
+  media_type: MediaType
+  filename: string
+  content_type: string
+  latitude?: number
+  longitude?: number
+}
 
 export interface MediaUploadResponse {
-  media_id: number
-  presigned_url: string
-  file_path: string
-}
-
-export interface MediaListResponse {
-  total: number
-  items: MediaAsset[]
+  upload_url: string
+  storage_key: string
+  media_id: string
+  expires_in: number
 }

@@ -15,6 +15,7 @@ import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import LinearProgress from '@mui/material/LinearProgress';
 import Alert from '@mui/material/Alert';
+import Divider from '@mui/material/Divider';
 import {
   ArrowLeft,
   Edit,
@@ -27,10 +28,19 @@ import {
   Map,
   History,
   Shield,
+  Plus,
+  Upload,
 } from 'lucide-react';
 import { Button, LoadingSpinner } from '../../components/mui';
 import { fetchProject } from '../../api/projects';
 import { format } from 'date-fns';
+
+// Import feature components
+import ProgressTimeline from '../../components/progress/ProgressTimeline';
+import ProjectGISView from '../../components/map/ProjectGISView';
+import MediaGallery from '../../components/media/MediaGallery';
+import MediaUpload from '../../components/media/MediaUpload';
+import ProjectAuditLog from '../../components/audit/ProjectAuditLog';
 
 type TabId = 'overview' | 'progress' | 'gis' | 'media' | 'audit';
 
@@ -61,6 +71,7 @@ export default function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [showUpload, setShowUpload] = useState(false);
 
   // Fetch project data
   const { data: project, isLoading, error } = useQuery({
@@ -78,6 +89,7 @@ export default function ProjectDetail() {
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: TabId) => {
     setActiveTab(newValue);
+    setShowUpload(false);
   };
 
   if (isLoading) {
@@ -294,57 +306,64 @@ export default function ProjectDetail() {
               Progress Timeline
             </Typography>
             <Button
-              variant="ghost"
+              variant="primary"
               size="sm"
               onClick={() => navigate(`/admin/projects/${projectId}/progress`)}
+              startIcon={<Plus size={18} />}
             >
-              Report Progress →
+              Report Progress
             </Button>
           </Box>
-          <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
-            <TrendingUp size={48} style={{ opacity: 0.5, marginBottom: 12 }} />
-            <Typography>Progress timeline visualization will be displayed here.</Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              Component implementation in progress...
-            </Typography>
-          </Box>
+          <ProgressTimeline projectId={projectId!} />
         </TabPanel>
 
         {/* GIS Tab */}
         <TabPanel value="gis" current={activeTab}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Typography variant="h6" fontWeight={600}>
-              GIS Data
+              GIS Features
             </Typography>
             <Button
-              variant="ghost"
+              variant="primary"
               size="sm"
               onClick={() => navigate(`/admin/projects/${projectId}/gis`)}
+              startIcon={<Edit size={18} />}
             >
-              Edit GIS Features →
+              Edit GIS Features
             </Button>
           </Box>
-          <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
-            <Map size={48} style={{ opacity: 0.5, marginBottom: 12 }} />
-            <Typography>GIS map and features will be displayed here.</Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              Component implementation in progress...
-            </Typography>
-          </Box>
+          <ProjectGISView projectId={projectId!} />
         </TabPanel>
 
         {/* Media Tab */}
         <TabPanel value="media" current={activeTab}>
-          <Typography variant="h6" fontWeight={600} sx={{ mb: 3 }}>
-            Media Gallery
-          </Typography>
-          <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
-            <Image size={48} style={{ opacity: 0.5, marginBottom: 12 }} />
-            <Typography>Photo gallery will be displayed here.</Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              Component implementation in progress...
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h6" fontWeight={600}>
+              Media Gallery
             </Typography>
+            <Button
+              variant={showUpload ? 'secondary' : 'primary'}
+              size="sm"
+              onClick={() => setShowUpload(!showUpload)}
+              startIcon={<Upload size={18} />}
+            >
+              {showUpload ? 'Hide Upload' : 'Upload Media'}
+            </Button>
           </Box>
+
+          {showUpload && (
+            <Box sx={{ mb: 4 }}>
+              <MediaUpload
+                projectId={projectId!}
+                onUploadComplete={() => {
+                  // Gallery will auto-refresh via query invalidation
+                }}
+              />
+              <Divider sx={{ my: 3 }} />
+            </Box>
+          )}
+
+          <MediaGallery projectId={projectId!} />
         </TabPanel>
 
         {/* Audit Tab */}
@@ -352,13 +371,7 @@ export default function ProjectDetail() {
           <Typography variant="h6" fontWeight={600} sx={{ mb: 3 }}>
             Audit Log
           </Typography>
-          <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
-            <History size={48} style={{ opacity: 0.5, marginBottom: 12 }} />
-            <Typography>Change history and audit logs will be displayed here.</Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              Component implementation in progress...
-            </Typography>
-          </Box>
+          <ProjectAuditLog projectId={projectId!} />
         </TabPanel>
       </Paper>
     </Box>

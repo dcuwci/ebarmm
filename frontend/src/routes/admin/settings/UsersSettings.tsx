@@ -589,9 +589,9 @@ export default function UsersSettings() {
               multiple
               options={groupsData?.items || []}
               getOptionLabel={(option: Group) => option.name}
-              value={(groupsData?.items || []).filter((g) => formData.group_ids.includes(g.group_id))}
+              value={(groupsData?.items || []).filter((g) => formData.group_ids.includes(g.id))}
               onChange={(_, newValue) =>
-                setFormData({ ...formData, group_ids: newValue.map((g) => g.group_id) })
+                setFormData({ ...formData, group_ids: newValue.map((g) => g.id) })
               }
               renderInput={(params) => <TextField {...params} label="Groups" />}
             />
@@ -701,8 +701,7 @@ export default function UsersSettings() {
         <DialogActions>
           <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
           <Button
-            variant="primary"
-            color="error"
+            variant="danger"
             onClick={() => selectedUser && deleteMutation.mutate(selectedUser.user_id)}
             disabled={deleteMutation.isPending}
           >

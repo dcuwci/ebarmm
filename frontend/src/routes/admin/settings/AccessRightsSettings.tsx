@@ -15,7 +15,6 @@ import Select from '@mui/material/Select'
 import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 import Checkbox from '@mui/material/Checkbox'
-import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
@@ -33,11 +32,7 @@ import Snackbar from '@mui/material/Snackbar'
 import {
   Search,
   Plus,
-  Save,
   Shield,
-  Eye,
-  Edit as EditIcon,
-  Trash2,
   Copy,
 } from 'lucide-react'
 import { Button, LoadingSpinner } from '../../../components/mui'
@@ -47,12 +42,10 @@ import {
   createAccessRight,
   updateAccessRight,
   deleteAccessRight,
-  AccessRight,
   AccessRightCreateData,
   AccessRightUpdateData,
 } from '../../../api/accessRights'
 import { listGroups } from '../../../api/groups'
-import type { Group } from '../../../stores/permissionStore'
 
 // Default resources if API doesn't return them
 const DEFAULT_RESOURCES = [
@@ -137,9 +130,9 @@ export default function AccessRightsSettings() {
 
     // Initialize matrix with empty permissions
     allGroups.forEach((group) => {
-      permMatrix[group.group_id] = {}
+      permMatrix[group.id] = {}
       allResources.forEach((resource) => {
-        permMatrix[group.group_id][resource] = {
+        permMatrix[group.id][resource] = {
           create: false,
           read: false,
           update: false,
@@ -150,8 +143,8 @@ export default function AccessRightsSettings() {
 
     // Fill in existing permissions
     rights.forEach((right) => {
-      if (permMatrix[right.group_id] && permMatrix[right.group_id][right.resource]) {
-        permMatrix[right.group_id][right.resource] = {
+      if (permMatrix[right.id] && permMatrix[right.id][right.resource]) {
+        permMatrix[right.id][right.resource] = {
           id: right.id,
           ...right.permissions,
         }
@@ -413,7 +406,7 @@ export default function AccessRightsSettings() {
               </TableHead>
               <TableBody>
                 {filteredGroups.map((group) => (
-                  <TableRow key={group.group_id} hover>
+                  <TableRow key={group.id} hover>
                     <TableCell
                       sx={{
                         fontWeight: 500,
@@ -432,7 +425,7 @@ export default function AccessRightsSettings() {
                       </Box>
                     </TableCell>
                     {filteredResources.map((resource) => {
-                      const perms = matrix[group.group_id]?.[resource]
+                      const perms = matrix[group.id]?.[resource]
                       return (
                         <TableCell key={resource} align="center" sx={{ p: 0.5 }}>
                           <Box
@@ -447,7 +440,7 @@ export default function AccessRightsSettings() {
                                 size="small"
                                 checked={perms?.create || false}
                                 onChange={() =>
-                                  handlePermissionToggle(group.group_id, resource, 'create')
+                                  handlePermissionToggle(group.id, resource, 'create')
                                 }
                                 sx={{ p: 0.25 }}
                               />
@@ -457,7 +450,7 @@ export default function AccessRightsSettings() {
                                 size="small"
                                 checked={perms?.read || false}
                                 onChange={() =>
-                                  handlePermissionToggle(group.group_id, resource, 'read')
+                                  handlePermissionToggle(group.id, resource, 'read')
                                 }
                                 sx={{ p: 0.25 }}
                               />
@@ -467,7 +460,7 @@ export default function AccessRightsSettings() {
                                 size="small"
                                 checked={perms?.update || false}
                                 onChange={() =>
-                                  handlePermissionToggle(group.group_id, resource, 'update')
+                                  handlePermissionToggle(group.id, resource, 'update')
                                 }
                                 sx={{ p: 0.25 }}
                               />
@@ -477,7 +470,7 @@ export default function AccessRightsSettings() {
                                 size="small"
                                 checked={perms?.delete || false}
                                 onChange={() =>
-                                  handlePermissionToggle(group.group_id, resource, 'delete')
+                                  handlePermissionToggle(group.id, resource, 'delete')
                                 }
                                 sx={{ p: 0.25 }}
                               />
@@ -490,7 +483,7 @@ export default function AccessRightsSettings() {
                                 onChange={(e) =>
                                   e.target.value &&
                                   handleApplyTemplate(
-                                    group.group_id,
+                                    group.id,
                                     resource,
                                     e.target.value as keyof typeof PERMISSION_TEMPLATES
                                   )
@@ -550,7 +543,7 @@ export default function AccessRightsSettings() {
                 onChange={(e) => setSelectedGroupId(e.target.value)}
               >
                 {groups.map((group) => (
-                  <MenuItem key={group.group_id} value={group.group_id}>
+                  <MenuItem key={group.id} value={group.id}>
                     {group.name}
                   </MenuItem>
                 ))}

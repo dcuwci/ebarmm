@@ -33,7 +33,6 @@ import {
   regenerateBackupCodes,
 } from '../../api/auth'
 import MFASetupWizard from '../../components/auth/MFASetupWizard'
-import MFAVerifyDialog from '../../components/auth/MFAVerifyDialog'
 
 interface ProfileFormData {
   first_name: string
@@ -376,7 +375,7 @@ export default function Profile() {
         {mfaStatus?.mfa_enabled ? (
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <Button
-              variant="secondary"
+              variant="danger"
               startIcon={<Smartphone size={18} />}
               onClick={() => {
                 // Prompt for code before regenerating
@@ -390,8 +389,7 @@ export default function Profile() {
               Regenerate Backup Codes
             </Button>
             <Button
-              variant="secondary"
-              color="error"
+              variant="danger"
               onClick={() => {
                 setMfaDisableOpen(true)
                 setMfaError('')
@@ -444,7 +442,6 @@ export default function Profile() {
           <Button onClick={() => setMfaDisableOpen(false)}>Cancel</Button>
           <Button
             variant="primary"
-            color="error"
             onClick={() => disableMfaMutation.mutate(disableCode)}
             disabled={disableMfaMutation.isPending || !disableCode}
           >

@@ -1,20 +1,33 @@
 /**
  * Media Assets API service
+ * Matches backend endpoints: /media/*
  */
 
 import { apiClient } from './client'
 import axios from 'axios'
 import type {
-  MediaUploadResponse,
-  MediaListResponse,
+  MediaAsset,
   MediaType,
+  MediaUploadRequest,
+  MediaUploadResponse,
 } from '../types/media'
 
 /**
  * Fetch media assets for a project
  */
-export async function fetchMedia(projectId: string): Promise<MediaListResponse> {
-  const { data } = await apiClient.get<MediaListResponse>(`/media/${projectId}`)
+export async function fetchProjectMedia(
+  projectId: string,
+  mediaType?: MediaType,
+  limit = 50
+): Promise<MediaAsset[]> {
+  const params: Record<string, unknown> = { limit }
+  if (mediaType) {
+    params.media_type = mediaType
+  }
+  const { data } = await apiClient.get<MediaAsset[]>(
+    `/media/projects/${projectId}/media`,
+    { params }
+  )
   return data
 }
 
@@ -22,22 +35,11 @@ export async function fetchMedia(projectId: string): Promise<MediaListResponse> 
  * Request upload URL for media file
  */
 export async function requestUploadUrl(
-  projectId: string,
-  fileName: string,
-  mediaType: MediaType,
-  gpsLatitude?: number,
-  gpsLongitude?: number,
-  caption?: string
+  request: MediaUploadRequest
 ): Promise<MediaUploadResponse> {
   const { data } = await apiClient.post<MediaUploadResponse>(
-    `/media/${projectId}/upload-url`,
-    {
-      file_name: fileName,
-      media_type: mediaType,
-      gps_latitude: gpsLatitude,
-      gps_longitude: gpsLongitude,
-      caption,
-    }
+    '/media/upload-url',
+    request
   )
   return data
 }
@@ -66,11 +68,55 @@ export async function uploadToS3(
 }
 
 /**
+ * Confirm upload was successful
+ */
+export async function confirmUpload(mediaId: string): Promise<MediaAsset> {
+  const { data } = await apiClient.post<MediaAsset>(`/media/${mediaId}/confirm`)
+  return data
+}
+
+/**
+ * Get single media asset
+ */
+export async function fetchMediaAsset(mediaId: string): Promise<MediaAsset> {
+  const { data } = await apiClient.get<MediaAsset>(`/media/${mediaId}`)
+  return data
+}
+
+/**
  * Delete media asset
  */
-export async function deleteMedia(
-  projectId: string,
-  mediaId: number
-): Promise<void> {
-  await apiClient.delete(`/media/${projectId}/${mediaId}`)
+export async function deleteMedia(mediaId: string): Promise<void> {
+  await apiClient.delete(`/media/${mediaId}`)
+}
+
+/**
+ * Helper to get file extension from filename
+ */
+export function getFileExtension(filename: string): string {
+  return filename.slice(((filename.lastIndexOf('.') - 1) >>> 0) + 2)
+}
+
+/**
+ * Helper to determine media type from file MIME type
+ */
+export function getMediaTypeFromMime(mimeType: string): MediaType {
+  if (mimeType.startsWith('image/')) return 'photo'
+  if (mimeType.startsWith('video/')) return 'video'
+  return 'document'
+}
+
+/**
+ * Format file size for display
+ */
+export function formatFileSize(bytes: number | null | undefined): string {
+  if (!bytes) return 'Unknown size'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let size = bytes
+  let unitIndex = 0
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex++
+  }
+  return `${size.toFixed(1)} ${units[unitIndex]}`
 }

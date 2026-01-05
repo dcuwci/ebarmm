@@ -110,8 +110,8 @@ export default function GroupsSettings() {
 
   // Fetch members for selected group
   const { data: membersData, isLoading: membersLoading } = useQuery({
-    queryKey: ['group-members', selectedGroup?.group_id],
-    queryFn: () => (selectedGroup ? listGroupMembers(selectedGroup.group_id) : Promise.resolve([])),
+    queryKey: ['group-members', selectedGroup?.id],
+    queryFn: () => (selectedGroup ? listGroupMembers(selectedGroup.id) : Promise.resolve([])),
     enabled: !!selectedGroup && membersDialogOpen,
   })
 
@@ -164,7 +164,7 @@ export default function GroupsSettings() {
     mutationFn: ({ groupId, userId }: { groupId: string; userId: string }) =>
       addGroupMember(groupId, userId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['group-members', selectedGroup?.group_id] })
+      queryClient.invalidateQueries({ queryKey: ['group-members', selectedGroup?.id] })
       queryClient.invalidateQueries({ queryKey: ['groups'] })
       setAddMemberDialogOpen(false)
       setSelectedUserToAdd(null)
@@ -178,7 +178,7 @@ export default function GroupsSettings() {
     mutationFn: ({ groupId, userId }: { groupId: string; userId: string }) =>
       removeGroupMember(groupId, userId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['group-members', selectedGroup?.group_id] })
+      queryClient.invalidateQueries({ queryKey: ['group-members', selectedGroup?.id] })
       queryClient.invalidateQueries({ queryKey: ['groups'] })
     },
   })
@@ -220,7 +220,7 @@ export default function GroupsSettings() {
   const handleEditSubmit = () => {
     if (!selectedGroup) return
     updateMutation.mutate({
-      groupId: selectedGroup.group_id,
+      groupId: selectedGroup.id,
       data: {
         name: formData.name,
         description: formData.description || undefined,
@@ -418,7 +418,7 @@ export default function GroupsSettings() {
             <Table
               columns={columns}
               data={data.items}
-              rowKey={(row) => row.group_id}
+              rowKey={(row) => row.id}
             />
             <TablePagination
               component="div"
@@ -553,9 +553,8 @@ export default function GroupsSettings() {
         <DialogActions>
           <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
           <Button
-            variant="primary"
-            color="error"
-            onClick={() => selectedGroup && deleteMutation.mutate(selectedGroup.group_id)}
+            variant="danger"
+            onClick={() => selectedGroup && deleteMutation.mutate(selectedGroup.id)}
             disabled={deleteMutation.isPending}
           >
             {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
@@ -580,7 +579,7 @@ export default function GroupsSettings() {
             </Typography>
             <Button
               variant="secondary"
-              size="small"
+              size="sm"
               startIcon={<UserPlus size={16} />}
               onClick={() => setAddMemberDialogOpen(true)}
             >
@@ -625,7 +624,7 @@ export default function GroupsSettings() {
                           onClick={() =>
                             selectedGroup &&
                             removeMemberMutation.mutate({
-                              groupId: selectedGroup.group_id,
+                              groupId: selectedGroup.id,
                               userId: member.user_id,
                             })
                           }
@@ -694,7 +693,7 @@ export default function GroupsSettings() {
               selectedGroup &&
               selectedUserToAdd &&
               addMemberMutation.mutate({
-                groupId: selectedGroup.group_id,
+                groupId: selectedGroup.id,
                 userId: selectedUserToAdd.user_id,
               })
             }

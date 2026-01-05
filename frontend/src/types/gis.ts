@@ -59,6 +59,12 @@ export interface Coordinate {
   lng: number
 }
 
+// List response type
+export interface GISFeatureListResponse {
+  total: number
+  items: GISFeature[]
+}
+
 // Map geometry type to feature type
 export function geometryTypeToFeatureType(geomType: GeometryType): FeatureType {
   switch (geomType) {

@@ -1,11 +1,17 @@
 /**
  * Media Upload Component
- * Drag-and-drop file upload with S3 pre-signed URL integration
+ * Drag-and-drop file upload with S3 pre-signed URL integration using MUI
  */
 
 import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import Box from '@mui/material/Box'
+import Paper from '@mui/material/Paper'
+import Typography from '@mui/material/Typography'
+import LinearProgress from '@mui/material/LinearProgress'
+import IconButton from '@mui/material/IconButton'
+import Alert from '@mui/material/Alert'
 import {
   Upload,
   X,
@@ -14,8 +20,12 @@ import {
   FileText,
   Film,
 } from 'lucide-react'
-import { requestUploadUrl, uploadToS3 } from '../../api/media'
-import { getErrorMessage } from '../../api/client'
+import {
+  requestUploadUrl,
+  uploadToS3,
+  confirmUpload,
+  getMediaTypeFromMime,
+} from '../../api/media'
 import type { MediaType } from '../../types/media'
 
 interface MediaUploadProps {
@@ -26,7 +36,7 @@ interface MediaUploadProps {
 interface UploadingFile {
   file: File
   progress: number
-  status: 'uploading' | 'success' | 'error'
+  status: 'uploading' | 'confirming' | 'success' | 'error'
   error?: string
   mediaType: MediaType
 }
@@ -34,7 +44,7 @@ interface UploadingFile {
 const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
 const ACCEPTED_FILE_TYPES = {
   'image/*': ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
-  'video/*': ['.mp4', '.mov', '.avi'],
+  'video/*': ['.mp4', '.mov', '.avi', '.webm'],
   'application/pdf': ['.pdf'],
 }
 
@@ -43,31 +53,16 @@ export default function MediaUpload({
   onUploadComplete,
 }: MediaUploadProps) {
   const queryClient = useQueryClient()
-  const [uploadingFiles, setUploadingFiles] = useState<
-    Map<string, UploadingFile>
-  >(new Map())
-
-  /**
-   * Determine media type from file
-   */
-  const getMediaType = (file: File): MediaType => {
-    if (file.type.startsWith('image/')) return 'photo'
-    if (file.type.startsWith('video/')) return 'video'
-    if (file.type === 'application/pdf') return 'document'
-    return 'other'
-  }
+  const [uploadingFiles, setUploadingFiles] = useState<Map<string, UploadingFile>>(
+    new Map()
+  )
+  const [error, setError] = useState<string | null>(null)
 
   /**
    * Upload mutation
    */
   const uploadMutation = useMutation({
-    mutationFn: async ({
-      file,
-      mediaType,
-    }: {
-      file: File
-      mediaType: MediaType
-    }) => {
+    mutationFn: async ({ file, mediaType }: { file: File; mediaType: MediaType }) => {
       const fileId = `${file.name}-${file.size}-${file.lastModified}`
 
       // Set initial status
@@ -82,14 +77,15 @@ export default function MediaUpload({
 
       try {
         // Request upload URL from backend
-        const { presigned_url } = await requestUploadUrl(
-          projectId,
-          file.name,
-          mediaType
-        )
+        const uploadResponse = await requestUploadUrl({
+          project_id: projectId,
+          media_type: mediaType,
+          filename: file.name,
+          content_type: file.type,
+        })
 
         // Upload to S3
-        await uploadToS3(presigned_url, file, (progress) => {
+        await uploadToS3(uploadResponse.upload_url, file, (progress) => {
           setUploadingFiles((prev) => {
             const updated = new Map(prev)
             const existing = updated.get(fileId)
@@ -100,12 +96,25 @@ export default function MediaUpload({
           })
         })
 
+        // Set confirming status
+        setUploadingFiles((prev) => {
+          const updated = new Map(prev)
+          const existing = updated.get(fileId)
+          if (existing) {
+            updated.set(fileId, { ...existing, progress: 100, status: 'confirming' })
+          }
+          return updated
+        })
+
+        // Confirm upload with backend
+        await confirmUpload(uploadResponse.media_id)
+
         // Mark as success
         setUploadingFiles((prev) => {
           const updated = new Map(prev)
           const existing = updated.get(fileId)
           if (existing) {
-            updated.set(fileId, { ...existing, progress: 100, status: 'success' })
+            updated.set(fileId, { ...existing, status: 'success' })
           }
           return updated
         })
@@ -120,8 +129,10 @@ export default function MediaUpload({
         }, 2000)
 
         return fileId
-      } catch (error) {
+      } catch (err) {
         // Mark as error
+        const errorMessage =
+          err instanceof Error ? err.message : 'Upload failed'
         setUploadingFiles((prev) => {
           const updated = new Map(prev)
           const existing = updated.get(fileId)
@@ -129,17 +140,20 @@ export default function MediaUpload({
             updated.set(fileId, {
               ...existing,
               status: 'error',
-              error: getErrorMessage(error),
+              error: errorMessage,
             })
           }
           return updated
         })
-        throw error
+        throw err
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['media', projectId] })
       onUploadComplete?.()
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'Upload failed')
     },
   })
 
@@ -148,19 +162,27 @@ export default function MediaUpload({
    */
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
+      setError(null)
       acceptedFiles.forEach((file) => {
-        const mediaType = getMediaType(file)
+        const mediaType = getMediaTypeFromMime(file.type)
         uploadMutation.mutate({ file, mediaType })
       })
     },
     [uploadMutation]
   )
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
     onDrop,
     accept: ACCEPTED_FILE_TYPES,
     maxSize: MAX_FILE_SIZE,
     multiple: true,
+    onDropRejected: (rejections) => {
+      const messages = rejections.map((r) => {
+        const errors = r.errors.map((e) => e.message).join(', ')
+        return `${r.file.name}: ${errors}`
+      })
+      setError(messages.join('; '))
+    },
   })
 
   /**
@@ -185,106 +207,170 @@ export default function MediaUpload({
         return <Film size={20} />
       case 'document':
         return <FileText size={20} />
-      default:
-        return <FileText size={20} />
     }
   }
 
   return (
-    <div className="space-y-4">
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {/* Error Alert */}
+      {error && (
+        <Alert severity="error" onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
       {/* Dropzone */}
-      <div
+      <Paper
         {...getRootProps()}
-        className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-          isDragActive
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
-        }`}
+        sx={{
+          p: 4,
+          textAlign: 'center',
+          cursor: 'pointer',
+          border: 2,
+          borderStyle: 'dashed',
+          borderColor: isDragReject
+            ? 'error.main'
+            : isDragActive
+            ? 'primary.main'
+            : 'grey.300',
+          bgcolor: isDragReject
+            ? 'error.50'
+            : isDragActive
+            ? 'primary.50'
+            : 'background.paper',
+          transition: 'all 0.2s',
+          '&:hover': {
+            borderColor: 'primary.main',
+            bgcolor: 'grey.50',
+          },
+        }}
       >
         <input {...getInputProps()} />
         <Upload
           size={48}
-          className={`mx-auto mb-3 ${
-            isDragActive ? 'text-blue-600' : 'text-gray-400'
-          }`}
+          style={{
+            color: isDragReject ? '#EF4444' : isDragActive ? '#3B82F6' : '#9CA3AF',
+            marginBottom: 12,
+          }}
         />
-        <p className="text-lg font-medium text-gray-900 mb-1">
-          {isDragActive ? 'Drop files here' : 'Drag & drop files here'}
-        </p>
-        <p className="text-sm text-gray-500 mb-4">
+        <Typography variant="h6" fontWeight={500} sx={{ mb: 0.5 }}>
+          {isDragReject
+            ? 'File type not supported'
+            : isDragActive
+            ? 'Drop files here'
+            : 'Drag & drop files here'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           or click to browse from your computer
-        </p>
-        <p className="text-xs text-gray-400">
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
           Supported: Images (JPG, PNG, GIF), Videos (MP4, MOV), Documents (PDF)
           <br />
           Max file size: 100MB
-        </p>
-      </div>
+        </Typography>
+      </Paper>
 
       {/* Uploading Files */}
       {uploadingFiles.size > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium text-gray-700">Uploading</h3>
-          {Array.from(uploadingFiles.entries()).map(([fileId, uploadFile]) => (
-            <div
-              key={fileId}
-              className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200"
-            >
-              {/* Icon */}
-              <div className="text-gray-500">
-                {getMediaIcon(uploadFile.mediaType)}
-              </div>
+        <Box>
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5 }}>
+            Uploading
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {Array.from(uploadingFiles.entries()).map(([fileId, uploadFile]) => (
+              <Paper
+                key={fileId}
+                variant="outlined"
+                sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 2 }}
+              >
+                {/* Icon */}
+                <Box sx={{ color: 'text.secondary' }}>
+                  {getMediaIcon(uploadFile.mediaType)}
+                </Box>
 
-              {/* File Info */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {uploadFile.file.name}
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="flex-1 bg-gray-200 rounded-full h-1.5">
-                    <div
-                      className={`h-1.5 rounded-full transition-all ${
-                        uploadFile.status === 'success'
-                          ? 'bg-green-500'
-                          : uploadFile.status === 'error'
-                          ? 'bg-red-500'
-                          : 'bg-blue-600'
-                      }`}
-                      style={{ width: `${uploadFile.progress}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-gray-500 w-10 text-right">
-                    {uploadFile.progress}%
-                  </span>
-                </div>
-                {uploadFile.error && (
-                  <p className="text-xs text-red-600 mt-1">
-                    {uploadFile.error}
-                  </p>
-                )}
-              </div>
-
-              {/* Status Icon */}
-              <div>
-                {uploadFile.status === 'success' && (
-                  <CheckCircle className="text-green-500" size={20} />
-                )}
-                {uploadFile.status === 'error' && (
-                  <button
-                    onClick={() => removeFile(fileId)}
-                    className="text-red-500 hover:text-red-700"
+                {/* File Info */}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography
+                    variant="body2"
+                    fontWeight={500}
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
                   >
-                    <X size={20} />
-                  </button>
-                )}
-                {uploadFile.status === 'uploading' && (
-                  <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+                    {uploadFile.file.name}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                    <Box sx={{ flex: 1 }}>
+                      <LinearProgress
+                        variant={
+                          uploadFile.status === 'confirming'
+                            ? 'indeterminate'
+                            : 'determinate'
+                        }
+                        value={uploadFile.progress}
+                        color={
+                          uploadFile.status === 'success'
+                            ? 'success'
+                            : uploadFile.status === 'error'
+                            ? 'error'
+                            : 'primary'
+                        }
+                        sx={{ height: 6, borderRadius: 1 }}
+                      />
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 40 }}>
+                      {uploadFile.status === 'confirming'
+                        ? 'Verifying...'
+                        : `${uploadFile.progress}%`}
+                    </Typography>
+                  </Box>
+                  {uploadFile.error && (
+                    <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
+                      {uploadFile.error}
+                    </Typography>
+                  )}
+                </Box>
+
+                {/* Status Icon */}
+                <Box>
+                  {uploadFile.status === 'success' && (
+                    <CheckCircle size={20} color="#22C55E" />
+                  )}
+                  {uploadFile.status === 'error' && (
+                    <IconButton
+                      size="small"
+                      onClick={() => removeFile(fileId)}
+                      sx={{ color: 'error.main' }}
+                    >
+                      <X size={18} />
+                    </IconButton>
+                  )}
+                  {(uploadFile.status === 'uploading' ||
+                    uploadFile.status === 'confirming') && (
+                    <Box
+                      sx={{
+                        width: 20,
+                        height: 20,
+                        border: 2,
+                        borderColor: 'primary.main',
+                        borderTopColor: 'transparent',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                        '@keyframes spin': {
+                          from: { transform: 'rotate(0deg)' },
+                          to: { transform: 'rotate(360deg)' },
+                        },
+                      }}
+                    />
+                  )}
+                </Box>
+              </Paper>
+            ))}
+          </Box>
+        </Box>
       )}
-    </div>
+    </Box>
   )
 }

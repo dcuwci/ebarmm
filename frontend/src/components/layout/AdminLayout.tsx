@@ -115,7 +115,6 @@ export default function AdminLayout() {
     return location.pathname.startsWith(path);
   };
 
-  const canAccessSettings = user?.role === 'super_admin' || user?.role === 'regional_admin';
 
   const drawerWidth = drawerOpen ? DRAWER_WIDTH : DRAWER_WIDTH_COLLAPSED;
 

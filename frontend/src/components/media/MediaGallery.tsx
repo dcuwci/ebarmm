@@ -1,15 +1,27 @@
 /**
  * Media Gallery Component
- * Grid layout with lightbox and GPS-tagged photos on map
+ * Grid layout with lightbox viewer using MUI components
  */
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import Box from '@mui/material/Box'
+import Paper from '@mui/material/Paper'
+import Typography from '@mui/material/Typography'
+import Tabs from '@mui/material/Tabs'
+import Tab from '@mui/material/Tab'
+import Grid from '@mui/material/Grid'
+import Chip from '@mui/material/Chip'
+import IconButton from '@mui/material/IconButton'
+import Dialog from '@mui/material/Dialog'
+import DialogContent from '@mui/material/DialogContent'
+import Skeleton from '@mui/material/Skeleton'
+import Alert from '@mui/material/Alert'
+import Tooltip from '@mui/material/Tooltip'
 import {
   X,
   MapPin,
   Calendar,
-  User,
   Download,
   Trash2,
   ChevronLeft,
@@ -17,30 +29,34 @@ import {
   Image as ImageIcon,
   FileText,
   Film,
+  ZoomIn,
 } from 'lucide-react'
-import { fetchMedia, deleteMedia } from '../../api/media'
+import { fetchProjectMedia, deleteMedia, formatFileSize } from '../../api/media'
 import { format } from 'date-fns'
-import type { MediaAsset } from '../../types/media'
+import type { MediaAsset, MediaType } from '../../types/media'
 
 interface MediaGalleryProps {
   projectId: string
+  canDelete?: boolean
 }
 
-export default function MediaGallery({ projectId }: MediaGalleryProps) {
+type FilterType = 'all' | MediaType
+
+export default function MediaGallery({ projectId, canDelete = true }: MediaGalleryProps) {
   const queryClient = useQueryClient()
   const [selectedMedia, setSelectedMedia] = useState<MediaAsset | null>(null)
   const [selectedIndex, setSelectedIndex] = useState<number>(-1)
-  const [filterType, setFilterType] = useState<string>('all')
+  const [filterType, setFilterType] = useState<FilterType>('all')
 
   // Fetch media
-  const { data, isLoading, error } = useQuery({
+  const { data: media, isLoading, error } = useQuery({
     queryKey: ['media', projectId],
-    queryFn: () => fetchMedia(projectId),
+    queryFn: () => fetchProjectMedia(projectId),
   })
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: (mediaId: number) => deleteMedia(projectId, mediaId),
+    mutationFn: (mediaId: string) => deleteMedia(mediaId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['media', projectId] })
       setSelectedMedia(null)
@@ -50,8 +66,8 @@ export default function MediaGallery({ projectId }: MediaGalleryProps) {
   // Filter media
   const filteredMedia =
     filterType === 'all'
-      ? data?.items || []
-      : data?.items.filter((m) => m.media_type === filterType) || []
+      ? media || []
+      : media?.filter((m) => m.media_type === filterType) || []
 
   // Navigate lightbox
   const navigateLightbox = (direction: 'prev' | 'next') => {
@@ -67,239 +83,357 @@ export default function MediaGallery({ projectId }: MediaGalleryProps) {
   }
 
   // Get icon for media type
-  const getMediaIcon = (mediaType: string) => {
+  const getMediaIcon = (mediaType: MediaType) => {
     switch (mediaType) {
       case 'photo':
-        return <ImageIcon size={16} />
+        return <ImageIcon size={24} />
       case 'video':
-        return <Film size={16} />
+        return <Film size={24} />
       case 'document':
-        return <FileText size={16} />
-      default:
-        return <FileText size={16} />
+        return <FileText size={24} />
     }
   }
 
+  // Get counts by type
+  const getCounts = () => {
+    if (!media) return { all: 0, photo: 0, video: 0, document: 0 }
+    return {
+      all: media.length,
+      photo: media.filter((m) => m.media_type === 'photo').length,
+      video: media.filter((m) => m.media_type === 'video').length,
+      document: media.filter((m) => m.media_type === 'document').length,
+    }
+  }
+
+  const counts = getCounts()
+
   if (isLoading) {
     return (
-      <div className="text-center py-8">
-        <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-2 text-gray-600">Loading media...</p>
-      </div>
+      <Box>
+        <Skeleton variant="rectangular" height={48} sx={{ mb: 2, borderRadius: 1 }} />
+        <Grid container spacing={2}>
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Grid item xs={6} sm={4} md={3} key={i}>
+              <Skeleton variant="rectangular" sx={{ paddingTop: '100%', borderRadius: 1 }} />
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
     )
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-700">Error loading media. Please try again.</p>
-      </div>
+      <Alert severity="error">
+        Error loading media. Please try again.
+      </Alert>
     )
   }
 
-  if (!data?.items.length) {
+  if (!media?.length) {
     return (
-      <div className="text-center py-12 text-gray-500">
-        <ImageIcon size={48} className="mx-auto mb-3 opacity-50" />
-        <p>No media files yet.</p>
-        <p className="text-sm mt-1">Upload photos, videos, or documents to get started.</p>
-      </div>
+      <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
+        <ImageIcon size={48} style={{ opacity: 0.5, marginBottom: 12 }} />
+        <Typography>No media files yet.</Typography>
+        <Typography variant="body2" sx={{ mt: 1 }}>
+          Upload photos, videos, or documents to get started.
+        </Typography>
+      </Box>
     )
   }
 
   return (
-    <div className="space-y-4">
+    <Box>
       {/* Filter Tabs */}
-      <div className="flex items-center gap-2 border-b border-gray-200">
-        {['all', 'photo', 'video', 'document'].map((type) => (
-          <button
-            key={type}
-            onClick={() => setFilterType(type)}
-            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-              filterType === type
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {type.charAt(0).toUpperCase() + type.slice(1)}s
-            <span className="ml-2 text-xs">
-              (
-              {type === 'all'
-                ? data.total
-                : data.items.filter((m) => m.media_type === type).length}
-              )
-            </span>
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={filterType}
+        onChange={(_, newValue) => setFilterType(newValue)}
+        sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+      >
+        <Tab value="all" label={`All (${counts.all})`} />
+        <Tab value="photo" label={`Photos (${counts.photo})`} icon={<ImageIcon size={16} />} iconPosition="start" />
+        <Tab value="video" label={`Videos (${counts.video})`} icon={<Film size={16} />} iconPosition="start" />
+        <Tab value="document" label={`Documents (${counts.document})`} icon={<FileText size={16} />} iconPosition="start" />
+      </Tabs>
 
       {/* Gallery Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {filteredMedia.map((media, index) => (
-          <div
-            key={media.media_id}
-            onClick={() => {
-              setSelectedMedia(media)
-              setSelectedIndex(index)
-            }}
-            className="group relative aspect-square bg-gray-100 rounded-lg overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
-          >
-            {/* Thumbnail */}
-            {media.media_type === 'photo' ? (
-              <img
-                src={media.file_path}
-                alt={media.caption || media.file_name}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gray-200">
-                {getMediaIcon(media.media_type)}
-                <span className="ml-2 text-sm text-gray-600">
-                  {media.media_type}
-                </span>
-              </div>
-            )}
+      <Grid container spacing={2}>
+        {filteredMedia.map((item, index) => (
+          <Grid item xs={6} sm={4} md={3} key={item.media_id}>
+            <Paper
+              onClick={() => {
+                setSelectedMedia(item)
+                setSelectedIndex(index)
+              }}
+              sx={{
+                position: 'relative',
+                paddingTop: '100%',
+                cursor: 'pointer',
+                overflow: 'hidden',
+                '&:hover': {
+                  boxShadow: 4,
+                  '& .media-overlay': {
+                    opacity: 1,
+                  },
+                },
+              }}
+            >
+              {/* Thumbnail */}
+              <Box
+                sx={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: 'grey.100',
+                }}
+              >
+                {item.media_type === 'photo' && item.download_url ? (
+                  <Box
+                    component="img"
+                    src={item.download_url}
+                    alt="Media"
+                    sx={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                    }}
+                  />
+                ) : (
+                  <Box sx={{ textAlign: 'center', color: 'text.secondary' }}>
+                    {getMediaIcon(item.media_type)}
+                    <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                      {item.media_type}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
 
-            {/* Overlay */}
-            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-opacity flex items-end p-2">
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs truncate">
-                {media.caption || media.file_name}
-              </div>
-            </div>
+              {/* Overlay */}
+              <Box
+                className="media-overlay"
+                sx={{
+                  position: 'absolute',
+                  inset: 0,
+                  bgcolor: 'rgba(0,0,0,0.4)',
+                  opacity: 0,
+                  transition: 'opacity 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <ZoomIn size={32} color="white" />
+              </Box>
 
-            {/* GPS Badge */}
-            {media.gps_latitude && media.gps_longitude && (
-              <div className="absolute top-2 right-2 bg-blue-600 text-white p-1 rounded">
-                <MapPin size={14} />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Lightbox */}
-      {selectedMedia && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center p-4">
-          {/* Navigation */}
-          <button
-            onClick={() => navigateLightbox('prev')}
-            className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 p-2"
-          >
-            <ChevronLeft size={48} />
-          </button>
-          <button
-            onClick={() => navigateLightbox('next')}
-            className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300 p-2"
-          >
-            <ChevronRight size={48} />
-          </button>
-
-          {/* Close Button */}
-          <button
-            onClick={() => {
-              setSelectedMedia(null)
-              setSelectedIndex(-1)
-            }}
-            className="absolute top-4 right-4 text-white hover:text-gray-300"
-          >
-            <X size={32} />
-          </button>
-
-          {/* Content */}
-          <div className="max-w-6xl w-full max-h-full flex flex-col">
-            {/* Media Display */}
-            <div className="flex-1 flex items-center justify-center mb-4">
-              {selectedMedia.media_type === 'photo' ? (
-                <img
-                  src={selectedMedia.file_path}
-                  alt={selectedMedia.caption || selectedMedia.file_name}
-                  className="max-w-full max-h-[70vh] object-contain"
+              {/* GPS Badge */}
+              {item.latitude && item.longitude && (
+                <Chip
+                  icon={<MapPin size={12} />}
+                  label="GPS"
+                  size="small"
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    bgcolor: 'primary.main',
+                    color: 'white',
+                    '& .MuiChip-icon': { color: 'white' },
+                  }}
                 />
-              ) : selectedMedia.media_type === 'video' ? (
-                <video
-                  src={selectedMedia.file_path}
+              )}
+            </Paper>
+          </Grid>
+        ))}
+      </Grid>
+
+      {/* Lightbox Dialog */}
+      <Dialog
+        open={Boolean(selectedMedia)}
+        onClose={() => setSelectedMedia(null)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: { bgcolor: 'grey.900', color: 'white' },
+        }}
+      >
+        {selectedMedia && (
+          <DialogContent sx={{ p: 0, position: 'relative' }}>
+            {/* Close Button */}
+            <IconButton
+              onClick={() => setSelectedMedia(null)}
+              sx={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                zIndex: 10,
+                color: 'white',
+                bgcolor: 'rgba(0,0,0,0.5)',
+                '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
+              }}
+            >
+              <X size={24} />
+            </IconButton>
+
+            {/* Navigation Buttons */}
+            {filteredMedia.length > 1 && (
+              <>
+                <IconButton
+                  onClick={() => navigateLightbox('prev')}
+                  sx={{
+                    position: 'absolute',
+                    left: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 10,
+                    color: 'white',
+                    bgcolor: 'rgba(0,0,0,0.5)',
+                    '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
+                  }}
+                >
+                  <ChevronLeft size={32} />
+                </IconButton>
+                <IconButton
+                  onClick={() => navigateLightbox('next')}
+                  sx={{
+                    position: 'absolute',
+                    right: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    zIndex: 10,
+                    color: 'white',
+                    bgcolor: 'rgba(0,0,0,0.5)',
+                    '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
+                  }}
+                >
+                  <ChevronRight size={32} />
+                </IconButton>
+              </>
+            )}
+
+            {/* Media Content */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 400,
+                p: 4,
+              }}
+            >
+              {selectedMedia.media_type === 'photo' && selectedMedia.download_url ? (
+                <Box
+                  component="img"
+                  src={selectedMedia.download_url}
+                  alt="Media"
+                  sx={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }}
+                />
+              ) : selectedMedia.media_type === 'video' && selectedMedia.download_url ? (
+                <Box
+                  component="video"
+                  src={selectedMedia.download_url}
                   controls
-                  className="max-w-full max-h-[70vh]"
+                  sx={{ maxWidth: '100%', maxHeight: '70vh' }}
                 />
               ) : (
-                <div className="bg-white rounded-lg p-8 text-center">
+                <Box sx={{ textAlign: 'center' }}>
                   {getMediaIcon(selectedMedia.media_type)}
-                  <p className="mt-4 text-gray-900 font-medium">
-                    {selectedMedia.file_name}
-                  </p>
-                  <a
-                    href={selectedMedia.file_path}
-                    download
-                    className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    <Download size={20} />
-                    Download
-                  </a>
-                </div>
+                  <Typography variant="h6" sx={{ mt: 2 }}>
+                    {String(selectedMedia.attributes?.filename || 'Document')}
+                  </Typography>
+                  {selectedMedia.download_url && (
+                    <Box
+                      component="a"
+                      href={selectedMedia.download_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        mt: 2,
+                        px: 3,
+                        py: 1.5,
+                        bgcolor: 'primary.main',
+                        color: 'white',
+                        borderRadius: 1,
+                        textDecoration: 'none',
+                        '&:hover': { bgcolor: 'primary.dark' },
+                      }}
+                    >
+                      <Download size={18} />
+                      Download
+                    </Box>
+                  )}
+                </Box>
               )}
-            </div>
+            </Box>
 
             {/* Info Panel */}
-            <div className="bg-gray-900 bg-opacity-75 rounded-lg p-4 text-white">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="font-medium mb-2">
-                    {selectedMedia.caption || selectedMedia.file_name}
-                  </p>
-                  <div className="flex items-center gap-4 text-sm text-gray-300">
-                    <div className="flex items-center gap-1">
+            <Box sx={{ p: 3, bgcolor: 'grey.800' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={500}>
+                    {String(selectedMedia.attributes?.filename || `${selectedMedia.media_type} file`)}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1, color: 'grey.400' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <Calendar size={14} />
-                      <span>
-                        {format(
-                          new Date(selectedMedia.uploaded_at),
-                          'MMM dd, yyyy'
-                        )}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <User size={14} />
-                      <span>{selectedMedia.uploaded_by}</span>
-                    </div>
-                  </div>
-                </div>
+                      <Typography variant="body2">
+                        {format(new Date(selectedMedia.uploaded_at), 'MMM dd, yyyy')}
+                      </Typography>
+                    </Box>
+                    {selectedMedia.file_size && (
+                      <Typography variant="body2">
+                        {formatFileSize(selectedMedia.file_size)}
+                      </Typography>
+                    )}
+                    {selectedMedia.latitude && selectedMedia.longitude && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <MapPin size={14} />
+                        <Typography variant="body2">
+                          {selectedMedia.latitude.toFixed(4)}, {selectedMedia.longitude.toFixed(4)}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </Box>
 
-                <div className="flex items-center justify-end gap-2">
-                  {selectedMedia.gps_latitude && selectedMedia.gps_longitude && (
-                    <div className="flex items-center gap-1 text-sm text-gray-300">
-                      <MapPin size={14} />
-                      <span>
-                        {selectedMedia.gps_latitude.toFixed(6)},{' '}
-                        {selectedMedia.gps_longitude.toFixed(6)}
-                      </span>
-                    </div>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  {selectedMedia.download_url && (
+                    <Tooltip title="Download">
+                      <IconButton
+                        component="a"
+                        href={selectedMedia.download_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{ color: 'white' }}
+                      >
+                        <Download size={20} />
+                      </IconButton>
+                    </Tooltip>
                   )}
-                  <a
-                    href={selectedMedia.file_path}
-                    download
-                    className="p-2 hover:bg-gray-700 rounded"
-                  >
-                    <Download size={20} />
-                  </a>
-                  <button
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          'Are you sure you want to delete this media?'
-                        )
-                      ) {
-                        deleteMutation.mutate(selectedMedia.media_id)
-                      }
-                    }}
-                    className="p-2 hover:bg-red-700 rounded"
-                  >
-                    <Trash2 size={20} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+                  {canDelete && (
+                    <Tooltip title="Delete">
+                      <IconButton
+                        onClick={() => {
+                          if (window.confirm('Are you sure you want to delete this media?')) {
+                            deleteMutation.mutate(selectedMedia.media_id)
+                          }
+                        }}
+                        sx={{ color: 'error.light' }}
+                      >
+                        <Trash2 size={20} />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
+              </Box>
+            </Box>
+          </DialogContent>
+        )}
+      </Dialog>
+    </Box>
   )
 }

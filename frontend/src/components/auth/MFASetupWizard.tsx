@@ -22,7 +22,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material'
-import { Shield, Copy, Check, QrCode, Key, CheckCircle } from 'lucide-react'
+import { Shield, Copy, Check, CheckCircle } from 'lucide-react'
 import { setupMfa, verifyMfaSetup, MFASetupResponse } from '../../api/auth'
 
 interface MFASetupWizardProps {

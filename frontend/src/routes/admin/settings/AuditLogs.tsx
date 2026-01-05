@@ -18,7 +18,6 @@ import Chip from '@mui/material/Chip'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import TablePagination from '@mui/material/TablePagination'
-import Collapse from '@mui/material/Collapse'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -238,46 +237,6 @@ export default function AuditLogs() {
     },
   ]
 
-  // Custom row renderer to include expanded content
-  const renderRow = (row: AuditLog, index: number) => {
-    const isExpanded = expandedRows.has(row.audit_id)
-    return (
-      <>
-        {isExpanded && row.payload && (
-          <tr>
-            <td colSpan={7} style={{ padding: 0 }}>
-              <Collapse in={isExpanded}>
-                <Box
-                  sx={{
-                    p: 2,
-                    bgcolor: 'action.hover',
-                    borderTop: 1,
-                    borderColor: 'divider',
-                  }}
-                >
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    Payload Details
-                  </Typography>
-                  <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.default' }}>
-                    <pre
-                      style={{
-                        margin: 0,
-                        fontSize: '0.75rem',
-                        overflow: 'auto',
-                        maxHeight: 200,
-                      }}
-                    >
-                      {JSON.stringify(row.payload, null, 2)}
-                    </pre>
-                  </Paper>
-                </Box>
-              </Collapse>
-            </td>
-          </tr>
-        )}
-      </>
-    )
-  }
 
   return (
     <Box sx={{ p: 3 }}>
@@ -406,7 +365,7 @@ export default function AuditLogs() {
           />
 
           {hasFilters && (
-            <Button variant="text" size="small" onClick={handleClearFilters} startIcon={<Filter size={16} />}>
+            <Button variant="ghost" size="sm" onClick={handleClearFilters} startIcon={<Filter size={16} />}>
               Clear Filters
             </Button>
           )}
