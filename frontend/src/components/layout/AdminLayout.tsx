@@ -24,6 +24,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import {
+  Menu as MenuIcon,
   ChevronLeft,
   LayoutDashboard,
   FolderKanban,
@@ -31,7 +32,6 @@ import {
   LogOut,
   Sun,
   Moon,
-  Settings,
   Users,
   Shield,
   Key,
@@ -42,6 +42,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 
 const DRAWER_WIDTH = 240;
+const DRAWER_WIDTH_COLLAPSED = 64;
 
 interface NavItem {
   label: string;
@@ -51,27 +52,19 @@ interface NavItem {
   roles?: string[];
 }
 
-// Main navigation items shown in header
-const headerNavItems = [
-  { label: 'Dashboard', icon: <LayoutDashboard size={18} />, path: '/admin' },
-  { label: 'Projects', icon: <FolderKanban size={18} />, path: '/admin/projects' },
-  { label: 'Map', icon: <Map size={18} />, path: '/admin/map' },
+// Main navigation items shown in header and sidebar
+const mainNavItems = [
+  { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
+  { label: 'Projects', icon: <FolderKanban size={20} />, path: '/admin/projects' },
+  { label: 'Map', icon: <Map size={20} />, path: '/admin/map' },
 ];
 
-// Sidebar items (Settings only)
-const sidebarItems: NavItem[] = [
-  {
-    label: 'Settings',
-    icon: <Settings size={20} />,
-    path: '/admin/settings',
-    roles: ['super_admin', 'regional_admin'],
-    children: [
-      { label: 'Users', icon: <Users size={18} />, path: '/admin/settings/users' },
-      { label: 'Groups', icon: <Shield size={18} />, path: '/admin/settings/groups' },
-      { label: 'Access Rights', icon: <Key size={18} />, path: '/admin/settings/access-rights' },
-      { label: 'Audit Logs', icon: <History size={18} />, path: '/admin/settings/audit-logs', roles: ['super_admin'] },
-    ],
-  },
+// Settings items (admin only)
+const settingsItems: NavItem[] = [
+  { label: 'Users', icon: <Users size={20} />, path: '/admin/settings/users' },
+  { label: 'Groups', icon: <Shield size={20} />, path: '/admin/settings/groups' },
+  { label: 'Access Rights', icon: <Key size={20} />, path: '/admin/settings/access-rights' },
+  { label: 'Audit Logs', icon: <History size={20} />, path: '/admin/settings/audit-logs', roles: ['super_admin'] },
 ];
 
 export default function AdminLayout() {
@@ -109,8 +102,18 @@ export default function AdminLayout() {
     return false; // No tab selected (e.g., settings pages)
   };
 
+  // Check if path is active
+  const isActive = (path: string) => {
+    if (path === '/admin') {
+      return location.pathname === '/admin';
+    }
+    return location.pathname.startsWith(path);
+  };
+
   // Check if user has access to settings
   const hasSettingsAccess = user?.role === 'super_admin' || user?.role === 'regional_admin';
+
+  const drawerWidth = drawerOpen ? DRAWER_WIDTH : DRAWER_WIDTH_COLLAPSED;
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
@@ -125,17 +128,6 @@ export default function AdminLayout() {
         }}
       >
         <Toolbar>
-          {/* Settings Toggle - only show if user has access */}
-          {hasSettingsAccess && (
-            <IconButton
-              edge="start"
-              onClick={handleDrawerToggle}
-              sx={{ mr: 2 }}
-            >
-              {drawerOpen ? <ChevronLeft size={24} /> : <Settings size={24} />}
-            </IconButton>
-          )}
-
           <Typography variant="h6" fontWeight={600} sx={{ mr: 4 }}>
             E-BARMM
           </Typography>
@@ -154,7 +146,7 @@ export default function AdminLayout() {
               },
             }}
           >
-            {headerNavItems.map((item) => (
+            {mainNavItems.map((item) => (
               <Tab
                 key={item.path}
                 value={item.path}
@@ -213,82 +205,142 @@ export default function AdminLayout() {
         </Toolbar>
       </AppBar>
 
-      {/* Sidebar Drawer - Only shown for users with settings access */}
-      {hasSettingsAccess && (
-        <Drawer
-          variant="permanent"
-          sx={{
-            width: drawerOpen ? DRAWER_WIDTH : 0,
-            flexShrink: 0,
-            '& .MuiDrawer-paper': {
-              width: drawerOpen ? DRAWER_WIDTH : 0,
-              boxSizing: 'border-box',
-              borderRight: drawerOpen ? 1 : 0,
-              borderColor: 'divider',
-              transition: (theme) =>
-                theme.transitions.create('width', {
-                  easing: theme.transitions.easing.sharp,
-                  duration: theme.transitions.duration.enteringScreen,
-                }),
-              overflowX: 'hidden',
-              overflowY: 'auto',
-              '&::-webkit-scrollbar': {
-                width: 0,
-                display: 'none',
-              },
-              scrollbarWidth: 'none',
-              msOverflowStyle: 'none',
-            },
-          }}
-        >
-          <Toolbar /> {/* Spacer for AppBar */}
+      {/* Sidebar Drawer */}
+      <Drawer
+        variant="permanent"
+        sx={{
+          width: drawerWidth,
+          flexShrink: 0,
+          '& .MuiDrawer-paper': {
+            width: drawerWidth,
+            boxSizing: 'border-box',
+            borderRight: 1,
+            borderColor: 'divider',
+            transition: (theme) =>
+              theme.transitions.create('width', {
+                easing: theme.transitions.easing.sharp,
+                duration: theme.transitions.duration.enteringScreen,
+              }),
+            overflow: 'hidden',
+          },
+        }}
+      >
+        <Toolbar /> {/* Spacer for AppBar */}
 
-          <Box sx={{ overflow: 'auto', mt: 1, display: drawerOpen ? 'block' : 'none' }}>
-            <Typography
-              variant="overline"
-              sx={{ px: 3, py: 1, display: 'block', color: 'text.secondary' }}
-            >
-              Settings
-            </Typography>
-            <List>
-              {sidebarItems[0]?.children
-                ?.filter((child) => !child.roles || child.roles.includes(user?.role || ''))
-                .map((child) => (
-                  <ListItem key={child.path} disablePadding>
-                    <ListItemButton
-                      onClick={() => navigate(child.path)}
-                      selected={location.pathname === child.path}
-                      sx={{
-                        minHeight: 44,
-                        px: 3,
-                        mx: 1,
-                        borderRadius: 1,
-                        '&.Mui-selected': {
-                          bgcolor: 'primary.main',
-                          color: 'primary.contrastText',
-                          '&:hover': {
-                            bgcolor: 'primary.dark',
-                          },
-                          '& .MuiListItemIcon-root': {
-                            color: 'inherit',
-                          },
+        {/* Toggle Button inside sidebar */}
+        <Box sx={{ display: 'flex', justifyContent: drawerOpen ? 'flex-end' : 'center', px: 1, py: 1 }}>
+          <IconButton onClick={handleDrawerToggle} size="small">
+            {drawerOpen ? <ChevronLeft size={20} /> : <MenuIcon size={20} />}
+          </IconButton>
+        </Box>
+
+        <Box sx={{ overflowY: 'auto', overflowX: 'hidden', flex: 1 }}>
+          {/* Main Navigation */}
+          <List>
+            {mainNavItems.map((item) => (
+              <ListItem key={item.path} disablePadding sx={{ display: 'block' }}>
+                <Tooltip title={!drawerOpen ? item.label : ''} placement="right">
+                  <ListItemButton
+                    onClick={() => navigate(item.path)}
+                    selected={isActive(item.path)}
+                    sx={{
+                      minHeight: 48,
+                      justifyContent: drawerOpen ? 'initial' : 'center',
+                      px: 2.5,
+                      mx: 1,
+                      borderRadius: 1,
+                      '&.Mui-selected': {
+                        bgcolor: 'primary.main',
+                        color: 'primary.contrastText',
+                        '&:hover': {
+                          bgcolor: 'primary.dark',
                         },
+                        '& .MuiListItemIcon-root': {
+                          color: 'inherit',
+                        },
+                      },
+                    }}
+                  >
+                    <ListItemIcon
+                      sx={{
+                        minWidth: 0,
+                        mr: drawerOpen ? 2 : 'auto',
+                        justifyContent: 'center',
                       }}
                     >
-                      <ListItemIcon sx={{ minWidth: 0, mr: 2 }}>
-                        {child.icon}
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={child.label}
-                        primaryTypographyProps={{ fontSize: '0.875rem' }}
-                      />
-                    </ListItemButton>
-                  </ListItem>
-                ))}
-            </List>
-          </Box>
-        </Drawer>
-      )}
+                      {item.icon}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={item.label}
+                      sx={{ opacity: drawerOpen ? 1 : 0 }}
+                    />
+                  </ListItemButton>
+                </Tooltip>
+              </ListItem>
+            ))}
+          </List>
+
+          {/* Settings Section - Only for admins */}
+          {hasSettingsAccess && (
+            <>
+              <Divider sx={{ my: 1 }} />
+              {drawerOpen && (
+                <Typography
+                  variant="overline"
+                  sx={{ px: 3, py: 1, display: 'block', color: 'text.secondary' }}
+                >
+                  Settings
+                </Typography>
+              )}
+              <List>
+                {settingsItems
+                  .filter((item) => !item.roles || item.roles.includes(user?.role || ''))
+                  .map((item) => (
+                    <ListItem key={item.path} disablePadding sx={{ display: 'block' }}>
+                      <Tooltip title={!drawerOpen ? item.label : ''} placement="right">
+                        <ListItemButton
+                          onClick={() => navigate(item.path)}
+                          selected={location.pathname === item.path}
+                          sx={{
+                            minHeight: 48,
+                            justifyContent: drawerOpen ? 'initial' : 'center',
+                            px: 2.5,
+                            mx: 1,
+                            borderRadius: 1,
+                            '&.Mui-selected': {
+                              bgcolor: 'primary.main',
+                              color: 'primary.contrastText',
+                              '&:hover': {
+                                bgcolor: 'primary.dark',
+                              },
+                              '& .MuiListItemIcon-root': {
+                                color: 'inherit',
+                              },
+                            },
+                          }}
+                        >
+                          <ListItemIcon
+                            sx={{
+                              minWidth: 0,
+                              mr: drawerOpen ? 2 : 'auto',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            {item.icon}
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={item.label}
+                            sx={{ opacity: drawerOpen ? 1 : 0 }}
+                          />
+                        </ListItemButton>
+                      </Tooltip>
+                    </ListItem>
+                  ))}
+              </List>
+            </>
+          )}
+        </Box>
+      </Drawer>
 
       {/* Main Content */}
       <Box
