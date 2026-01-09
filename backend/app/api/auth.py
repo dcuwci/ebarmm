@@ -205,6 +205,74 @@ def _generate_tokens(user: User, db: Session) -> dict:
     return result
 
 
+@router.post("/login-json", response_model=LoginResponse)
+async def login_json(
+    credentials: LoginRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Authenticate user and return JWT token (JSON version for mobile apps).
+
+    Accepts JSON body with username and password.
+    If MFA is enabled for the user, returns mfa_required=true with a session token.
+    """
+    user = authenticate_user(db, credentials.username, credentials.password)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is disabled"
+        )
+
+    # Check if MFA is enabled
+    if user.mfa_enabled:
+        # Generate session token for MFA flow
+        session_token = secrets.token_urlsafe(32)
+        # Store in cache/session (implementation depends on your caching setup)
+        # For now, return mfa_required
+        return LoginResponse(
+            mfa_required=True,
+            mfa_session_token=session_token
+        )
+
+    # Update last login
+    user.last_login = datetime.utcnow()
+    db.commit()
+
+    # Create access token
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={
+            "sub": str(user.user_id),
+            "username": user.username,
+            "role": user.role,
+            "deo_id": user.deo_id,
+            "region": user.region
+        },
+        expires_delta=access_token_expires
+    )
+
+    result = {
+        "access_token": access_token,
+        "token_type": "Bearer",
+        "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        "user": user
+    }
+
+    # Add refresh token if enabled
+    if settings.REFRESH_TOKEN_ENABLED:
+        result["refresh_token"] = create_refresh_token(user, db)
+
+    return result
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
