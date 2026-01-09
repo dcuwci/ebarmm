@@ -386,7 +386,7 @@ export default function Dashboard() {
               <Button
                 variant="secondary"
                 fullWidth
-                onClick={() => navigate('/map')}
+                onClick={() => navigate('/admin/map')}
                 startIcon={<Map size={20} />}
               >
                 View Map

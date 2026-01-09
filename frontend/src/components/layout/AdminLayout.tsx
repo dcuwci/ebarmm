@@ -57,7 +57,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
   { label: 'Projects', icon: <FolderKanban size={20} />, path: '/admin/projects' },
-  { label: 'Map View', icon: <Map size={20} />, path: '/map' },
+  { label: 'Map View', icon: <Map size={20} />, path: '/admin/map' },
   {
     label: 'Settings',
     icon: <Settings size={20} />,
@@ -208,6 +208,13 @@ export default function AdminLayout() {
                 duration: theme.transitions.duration.enteringScreen,
               }),
             overflowX: 'hidden',
+            overflowY: 'auto',
+            '&::-webkit-scrollbar': {
+              width: 0,
+              display: 'none',
+            },
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
           },
         }}
       >

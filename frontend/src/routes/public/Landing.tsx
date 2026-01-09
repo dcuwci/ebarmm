@@ -6,7 +6,7 @@ import Card from '@mui/material/Card';
 import CardMedia from '@mui/material/CardMedia';
 import MobileStepper from '@mui/material/MobileStepper';
 import Button from '@mui/material/Button';
-import { Map, LogIn, ChevronRight } from 'lucide-react';
+import { LogIn, ChevronRight, MapPin } from 'lucide-react';
 
 // Infrastructure images for the carousel
 const images = [
@@ -114,27 +114,9 @@ export default function Landing() {
               position: 'absolute',
               top: 24,
               right: 24,
-              display: 'flex',
-              gap: 2,
               zIndex: 10,
             }}
           >
-            <Button
-              variant="outlined"
-              startIcon={<Map size={18} />}
-              onClick={() => navigate('/map')}
-              sx={{
-                color: 'white',
-                borderColor: 'rgba(255,255,255,0.5)',
-                backdropFilter: 'blur(4px)',
-                '&:hover': {
-                  borderColor: 'white',
-                  backgroundColor: 'rgba(255,255,255,0.1)',
-                },
-              }}
-            >
-              View Map
-            </Button>
             <Button
               variant="contained"
               startIcon={<LogIn size={18} />}
@@ -211,6 +193,7 @@ export default function Landing() {
                 <Button
                   variant="outlined"
                   size="large"
+                  startIcon={<MapPin size={20} />}
                   onClick={() => navigate('/map')}
                   sx={{
                     color: 'white',

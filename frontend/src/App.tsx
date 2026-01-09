@@ -17,6 +17,7 @@ import Login from './routes/auth/Login'
 // Admin routes
 import Dashboard from './routes/admin/Dashboard'
 import ProjectList from './routes/admin/ProjectList'
+import AdminMap from './routes/admin/AdminMap'
 import ProjectForm from './routes/admin/ProjectForm'
 import ProjectDetail from './routes/admin/ProjectDetail'
 import ProgressReport from './routes/admin/ProgressReport'
@@ -59,6 +60,7 @@ function App() {
           }
         >
           <Route index element={<Dashboard />} />
+          <Route path="map" element={<AdminMap />} />
           <Route path="projects" element={<ProjectList />} />
           <Route path="projects/new" element={<ProjectForm />} />
           <Route path="projects/:projectId" element={<ProjectDetail />} />
