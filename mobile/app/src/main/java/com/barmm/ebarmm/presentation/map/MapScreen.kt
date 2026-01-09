@@ -3,7 +3,6 @@ package com.barmm.ebarmm.presentation.map
 import android.content.Context
 import android.graphics.Color as AndroidColor
 import android.graphics.drawable.GradientDrawable
-import android.view.MotionEvent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -40,6 +39,8 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polygon
+import org.osmdroid.views.overlay.Polyline
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,16 +80,15 @@ fun MapScreen(
                     modifier = Modifier.align(Alignment.Center)
                 )
             } else {
-                val markers = viewModel.getProjectMarkers()
+                val geometries = viewModel.getProjectGeometries()
 
                 OsmMapView(
-                    markers = markers,
+                    geometries = geometries,
                     selectedProject = uiState.selectedProject,
-                    onMarkerClick = { marker ->
-                        val project = uiState.projects.find { it.projectId == marker.projectId }
+                    onGeometryClick = { geometry ->
+                        val project = uiState.projects.find { it.projectId == geometry.projectId }
                         viewModel.selectProject(project)
-                    },
-                    onProjectNavigate = onProjectClick
+                    }
                 )
 
                 // Selected project info card
@@ -132,7 +132,7 @@ fun MapScreen(
                     )
                 ) {
                     Text(
-                        text = "${markers.size} projects on map",
+                        text = "${geometries.size} projects on map",
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         style = MaterialTheme.typography.labelMedium
                     )
@@ -144,10 +144,9 @@ fun MapScreen(
 
 @Composable
 private fun OsmMapView(
-    markers: List<ProjectMarker>,
+    geometries: List<ProjectGeometry>,
     selectedProject: com.barmm.ebarmm.data.remote.dto.PublicProjectResponse?,
-    onMarkerClick: (ProjectMarker) -> Unit,
-    onProjectNavigate: (String) -> Unit
+    onGeometryClick: (ProjectGeometry) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -167,29 +166,106 @@ private fun OsmMapView(
         update = { map ->
             map.overlays.clear()
 
-            markers.forEach { marker ->
-                val osmMarker = Marker(map).apply {
-                    position = GeoPoint(marker.latitude, marker.longitude)
-                    title = marker.title
-                    snippet = "${marker.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", marker.progress)}"
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            geometries.forEach { geometry ->
+                val color = getStatusColor(geometry.status)
+                val androidColor = color.toArgb()
 
-                    // Set marker color based on status
-                    icon = createMarkerDrawable(context, getStatusColor(marker.status))
+                when (geometry) {
+                    is ProjectGeometry.Point -> {
+                        val marker = Marker(map).apply {
+                            position = geometry.location
+                            title = geometry.title
+                            snippet = "${geometry.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", geometry.progress)}"
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                            icon = createMarkerDrawable(androidColor)
+                            setOnMarkerClickListener { _, _ ->
+                                onGeometryClick(geometry)
+                                true
+                            }
+                        }
+                        map.overlays.add(marker)
+                    }
 
-                    setOnMarkerClickListener { _, _ ->
-                        onMarkerClick(marker)
-                        true
+                    is ProjectGeometry.Line -> {
+                        val polyline = Polyline().apply {
+                            setPoints(geometry.points)
+                            outlinePaint.color = androidColor
+                            outlinePaint.strokeWidth = 8f
+                            title = geometry.title
+                            snippet = "${geometry.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", geometry.progress)}"
+                            setOnClickListener { _, _, _ ->
+                                onGeometryClick(geometry)
+                                true
+                            }
+                        }
+                        map.overlays.add(polyline)
+
+                        // Add a marker at the center for easier selection
+                        if (geometry.points.isNotEmpty()) {
+                            val centerIndex = geometry.points.size / 2
+                            val centerPoint = geometry.points[centerIndex]
+                            val centerMarker = Marker(map).apply {
+                                position = centerPoint
+                                title = geometry.title
+                                snippet = "${geometry.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", geometry.progress)}"
+                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                                icon = createSmallMarkerDrawable(androidColor)
+                                setOnMarkerClickListener { _, _ ->
+                                    onGeometryClick(geometry)
+                                    true
+                                }
+                            }
+                            map.overlays.add(centerMarker)
+                        }
+                    }
+
+                    is ProjectGeometry.Polygon -> {
+                        val polygon = Polygon().apply {
+                            points = geometry.points
+                            fillPaint.color = AndroidColor.argb(50, AndroidColor.red(androidColor), AndroidColor.green(androidColor), AndroidColor.blue(androidColor))
+                            outlinePaint.color = androidColor
+                            outlinePaint.strokeWidth = 4f
+                            title = geometry.title
+                            snippet = "${geometry.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", geometry.progress)}"
+                            setOnClickListener { _, _, _ ->
+                                onGeometryClick(geometry)
+                                true
+                            }
+                        }
+                        map.overlays.add(polygon)
+
+                        // Add a marker at centroid for easier selection
+                        if (geometry.points.isNotEmpty()) {
+                            val centroid = calculateCentroid(geometry.points)
+                            val centerMarker = Marker(map).apply {
+                                position = centroid
+                                title = geometry.title
+                                snippet = "${geometry.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", geometry.progress)}"
+                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                                icon = createSmallMarkerDrawable(androidColor)
+                                setOnMarkerClickListener { _, _ ->
+                                    onGeometryClick(geometry)
+                                    true
+                                }
+                            }
+                            map.overlays.add(centerMarker)
+                        }
                     }
                 }
-                map.overlays.add(osmMarker)
             }
 
             // Zoom to selected project if any
             selectedProject?.let { project ->
-                markers.find { it.projectId == project.projectId }?.let { marker ->
-                    map.controller.animateTo(GeoPoint(marker.latitude, marker.longitude))
-                    map.controller.setZoom(12.0)
+                geometries.find { it.projectId == project.projectId }?.let { geometry ->
+                    val targetPoint = when (geometry) {
+                        is ProjectGeometry.Point -> geometry.location
+                        is ProjectGeometry.Line -> if (geometry.points.isNotEmpty()) geometry.points[geometry.points.size / 2] else null
+                        is ProjectGeometry.Polygon -> if (geometry.points.isNotEmpty()) calculateCentroid(geometry.points) else null
+                    }
+                    targetPoint?.let {
+                        map.controller.animateTo(it)
+                        map.controller.setZoom(14.0)
+                    }
                 }
             }
 
@@ -204,14 +280,32 @@ private fun OsmMapView(
     }
 }
 
-private fun createMarkerDrawable(context: Context, color: Color): android.graphics.drawable.Drawable {
-    val drawable = GradientDrawable().apply {
+private fun calculateCentroid(points: List<GeoPoint>): GeoPoint {
+    var sumLat = 0.0
+    var sumLon = 0.0
+    points.forEach {
+        sumLat += it.latitude
+        sumLon += it.longitude
+    }
+    return GeoPoint(sumLat / points.size, sumLon / points.size)
+}
+
+private fun createMarkerDrawable(color: Int): android.graphics.drawable.Drawable {
+    return GradientDrawable().apply {
         shape = GradientDrawable.OVAL
-        setColor(color.toArgb())
+        setColor(color)
         setStroke(4, AndroidColor.WHITE)
         setSize(48, 48)
     }
-    return drawable
+}
+
+private fun createSmallMarkerDrawable(color: Int): android.graphics.drawable.Drawable {
+    return GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(color)
+        setStroke(2, AndroidColor.WHITE)
+        setSize(24, 24)
+    }
 }
 
 private fun getStatusColor(status: String): Color {
