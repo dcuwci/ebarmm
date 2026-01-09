@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
@@ -228,8 +228,9 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
         center={DEFAULT_CENTER}
         zoom={DEFAULT_ZOOM}
         style={{ height: '100%', width: '100%' }}
-        zoomControl={true}
+        zoomControl={false}
       >
+        <ZoomControl position="bottomright" />
         <TileLayer url={tileLayer.url} attribution={tileLayer.attribution} />
 
         <MapBoundsFitter

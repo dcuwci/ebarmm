@@ -6,19 +6,19 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
-import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
-import Chip from '@mui/material/Chip';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemButton from '@mui/material/ListItemButton';
-import ListItemText from '@mui/material/ListItemText';
 import IconButton from '@mui/material/IconButton';
-import LinearProgress from '@mui/material/LinearProgress';
-import Tooltip from '@mui/material/Tooltip';
-import { X, MapPin, List as ListIcon } from 'lucide-react';
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
+import Popover from '@mui/material/Popover';
+import Badge from '@mui/material/Badge';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
+import Collapse from '@mui/material/Collapse';
+import { Search, Filter, X, RefreshCw } from 'lucide-react';
 import { LeafletMap } from '../../components/map/LeafletMap';
-import { LoadingSpinner, DashboardFilter } from '../../components/mui';
+import { LoadingSpinner, FilterButton } from '../../components/mui';
 import { apiClient } from '../../api/client';
 
 interface DEO {
@@ -59,17 +59,8 @@ interface ProjectsResponse {
   items: Project[];
 }
 
-const STATUS_COLORS: Record<string, 'default' | 'primary' | 'success' | 'warning' | 'error'> = {
-  planning: 'default',
-  ongoing: 'primary',
-  completed: 'success',
-  suspended: 'warning',
-  cancelled: 'error',
-};
-
 export default function AdminMap() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Filter state
   const [search, setSearch] = useState('');
@@ -81,8 +72,12 @@ export default function AdminMap() {
   const [selectedModes, setSelectedModes] = useState<string[]>([]);
   const [selectedScales, setSelectedScales] = useState<string[]>([]);
 
+  // Floating control state
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLButtonElement | null>(null);
+
   // Fetch filter options
-  const { data: filterOptions, isLoading: filterOptionsLoading } = useQuery({
+  const { data: filterOptions } = useQuery({
     queryKey: ['filterOptions'],
     queryFn: async () => {
       const response = await apiClient.get('/public/filter-options');
@@ -169,6 +164,49 @@ export default function AdminMap() {
     refetchProjects();
   }, [refetchProjects]);
 
+  // Calculate active filters count
+  const activeFiltersCount =
+    selectedDEOs.length +
+    selectedProvinces.length +
+    selectedStatuses.length +
+    selectedFundYears.length +
+    selectedFundSources.length +
+    selectedModes.length +
+    selectedScales.length;
+
+  const hasActiveFilters = activeFiltersCount > 0 || search.length > 0;
+
+  const clearAllFilters = () => {
+    setSearch('');
+    setSelectedDEOs([]);
+    setSelectedProvinces([]);
+    setSelectedStatuses([]);
+    setSelectedFundYears([]);
+    setSelectedFundSources([]);
+    setSelectedModes([]);
+    setSelectedScales([]);
+  };
+
+  // DEO helpers
+  const deoOptions = filterOptions?.deos.map((d) => d.deo_name) || [];
+  const selectedDEONames = filterOptions?.deos
+    .filter((d) => selectedDEOs.includes(d.deo_id))
+    .map((d) => d.deo_name) || [];
+
+  const handleDEOChange = (names: string[]) => {
+    const ids = filterOptions?.deos
+      .filter((d) => names.includes(d.deo_name))
+      .map((d) => d.deo_id) || [];
+    setSelectedDEOs(ids);
+  };
+
+  // Fund year helpers
+  const fundYearOptions = filterOptions?.fund_years.map(String) || [];
+  const selectedFundYearStrings = selectedFundYears.map(String);
+  const handleFundYearChange = (years: string[]) => {
+    setSelectedFundYears(years.map((y) => parseInt(y, 10)));
+  };
+
   if (isLoading) {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 64px)' }}>
@@ -186,168 +224,235 @@ export default function AdminMap() {
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
-      {/* Dashboard Filter */}
-      <Box sx={{ px: { xs: 1, sm: 2 }, pt: { xs: 1, sm: 2 }, flexShrink: 0 }}>
-        <DashboardFilter
-          filterOptions={filterOptions || null}
-          filterOptionsLoading={filterOptionsLoading}
-          search={search}
-          onSearchChange={setSearch}
-          selectedDEOs={selectedDEOs}
-          onDEOChange={setSelectedDEOs}
-          selectedProvinces={selectedProvinces}
-          onProvinceChange={setSelectedProvinces}
-          selectedStatuses={selectedStatuses}
-          onStatusChange={setSelectedStatuses}
-          selectedFundYears={selectedFundYears}
-          onFundYearChange={setSelectedFundYears}
-          selectedFundSources={selectedFundSources}
-          onFundSourceChange={setSelectedFundSources}
-          selectedModes={selectedModes}
-          onModeChange={setSelectedModes}
-          selectedScales={selectedScales}
-          onScaleChange={setSelectedScales}
-          onRefresh={handleRefresh}
-          loading={isLoading}
-        />
-      </Box>
+    <Box sx={{ position: 'relative', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
+      {/* Floating Control Bar */}
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 16,
+          left: 16,
+          zIndex: 1000,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1,
+        }}
+      >
+        {/* Main Control Bar */}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            bgcolor: 'background.paper',
+            borderRadius: 2,
+            boxShadow: 2,
+            overflow: 'hidden',
+          }}
+        >
+          {/* Search Section */}
+          <Collapse in={searchExpanded} orientation="horizontal" collapsedSize={0}>
+            <TextField
+              size="small"
+              placeholder="Search..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              autoFocus
+              InputProps={{
+                sx: { pr: 0 },
+                endAdornment: search && (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setSearch('')}>
+                      <X size={16} />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ width: 180, '& .MuiOutlinedInput-notchedOutline': { border: 'none' } }}
+            />
+          </Collapse>
 
-      {/* Map and Sidebar Container */}
-      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Sidebar */}
-        {sidebarOpen && (
-          <Paper
-            elevation={2}
+          {/* Search Toggle */}
+          <IconButton
+            onClick={() => setSearchExpanded(!searchExpanded)}
             sx={{
-              width: { xs: 280, sm: 320 },
-              display: 'flex',
-              flexDirection: 'column',
-              borderRadius: 0,
-              zIndex: 1000,
+              bgcolor: searchExpanded || search ? 'action.selected' : 'transparent',
             }}
           >
-            {/* Header */}
-            <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  Projects ({filteredProjects.length})
-                </Typography>
-                <IconButton size="small" onClick={() => setSidebarOpen(false)}>
-                  <X size={18} />
-                </IconButton>
-              </Box>
-              <Typography variant="caption" color="text.secondary">
-                {projectsWithGeometry.length} with map location
-              </Typography>
-            </Box>
+            <Search size={20} />
+          </IconButton>
 
-          {/* Project List */}
-          <Box sx={{ flex: 1, overflow: 'auto' }}>
-            <List disablePadding>
-              {filteredProjects.map((project) => (
-                <ListItem key={project.project_id} disablePadding divider>
-                  <ListItemButton
-                    selected={selectedProjectId === project.project_id}
-                    onClick={() => setSelectedProjectId(project.project_id)}
-                    sx={{ py: 1.5 }}
-                  >
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                          <Typography variant="body2" fontWeight={500} sx={{ flex: 1 }}>
-                            {project.project_title}
-                          </Typography>
-                          {!project.geometry_wkt && (
-                            <Chip label="No GIS" size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
-                          )}
-                        </Box>
-                      }
-                      secondary={
-                        <Box sx={{ mt: 0.5 }}>
-                          {project.location && (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                              <MapPin size={12} />
-                              <Typography variant="caption" color="text.secondary">
-                                {project.location}
-                              </Typography>
-                            </Box>
-                          )}
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Chip
-                              label={project.status}
-                              size="small"
-                              color={STATUS_COLORS[project.status] || 'default'}
-                              sx={{ fontSize: '0.65rem', height: 20 }}
-                            />
-                            {project.current_progress !== undefined && (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1 }}>
-                                <LinearProgress
-                                  variant="determinate"
-                                  value={project.current_progress}
-                                  sx={{ flex: 1, height: 4, borderRadius: 1 }}
-                                />
-                                <Typography variant="caption" color="text.secondary">
-                                  {Math.round(project.current_progress)}%
-                                </Typography>
-                              </Box>
-                            )}
-                          </Box>
-                        </Box>
-                      }
-                    />
-                  </ListItemButton>
-                </ListItem>
-              ))}
-            </List>
+          {/* Filter Button */}
+          <Badge badgeContent={activeFiltersCount} color="primary" overlap="circular">
+            <IconButton
+              onClick={(e) => setFilterAnchorEl(e.currentTarget)}
+              sx={{
+                bgcolor: filterAnchorEl || activeFiltersCount > 0 ? 'action.selected' : 'transparent',
+              }}
+            >
+              <Filter size={20} />
+            </IconButton>
+          </Badge>
 
-            {filteredProjects.length === 0 && (
-              <Box sx={{ p: 3, textAlign: 'center' }}>
-                <Typography color="text.secondary">
-                  No projects found
-                </Typography>
-              </Box>
-            )}
-          </Box>
-        </Paper>
-      )}
-
-      {/* Map */}
-      <Box sx={{ flex: 1, position: 'relative' }}>
-        {/* Toggle sidebar button when closed */}
-        {!sidebarOpen && (
-          <Box
-            sx={{
-              position: 'absolute',
-              top: 10,
-              left: 10,
-              zIndex: 1100,
-            }}
-          >
-            <Tooltip title="Show projects">
-              <IconButton
-                onClick={() => setSidebarOpen(true)}
-                sx={{
-                  bgcolor: 'background.paper',
-                  boxShadow: 2,
-                  '&:hover': { bgcolor: 'background.paper' },
-                }}
-              >
-                <ListIcon size={20} />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        )}
-
-        <LeafletMap
-          projects={projectsWithGeometry}
-          selectedProjectId={selectedProjectId}
-          onProjectSelect={handleProjectSelect}
-          height="100%"
-          showThemeToggle={true}
-        />
+          {/* Refresh Button */}
+          <IconButton onClick={handleRefresh}>
+            <RefreshCw size={20} />
+          </IconButton>
         </Box>
+
+        {/* Project Count & Active Filters */}
+        <Box
+          sx={{
+            bgcolor: 'background.paper',
+            borderRadius: 1,
+            px: 1.5,
+            py: 0.5,
+            boxShadow: 1,
+            width: 'fit-content',
+          }}
+        >
+          <Typography variant="caption">
+            {projectsWithGeometry.length} of {filteredProjects.length} projects on map
+          </Typography>
+        </Box>
+
+        {/* Active Filter Chips */}
+        {hasActiveFilters && (
+          <Stack
+            direction="row"
+            spacing={0.5}
+            sx={{
+              flexWrap: 'wrap',
+              gap: 0.5,
+              maxWidth: 300,
+            }}
+            useFlexGap
+          >
+            {search && (
+              <Chip
+                label={`"${search}"`}
+                size="small"
+                onDelete={() => setSearch('')}
+                sx={{ bgcolor: 'background.paper' }}
+              />
+            )}
+            {selectedDEONames.slice(0, 2).map((name) => (
+              <Chip
+                key={name}
+                label={name}
+                size="small"
+                onDelete={() => {
+                  const deo = filterOptions?.deos.find((d) => d.deo_name === name);
+                  if (deo) setSelectedDEOs(selectedDEOs.filter((id) => id !== deo.deo_id));
+                }}
+                sx={{ bgcolor: 'background.paper' }}
+              />
+            ))}
+            {activeFiltersCount > 2 && (
+              <Chip
+                label={`+${activeFiltersCount - 2} more`}
+                size="small"
+                onClick={(e) => setFilterAnchorEl(e.currentTarget as any)}
+                sx={{ bgcolor: 'background.paper' }}
+              />
+            )}
+            <Chip
+              label="Clear"
+              size="small"
+              onClick={clearAllFilters}
+              sx={{ bgcolor: 'background.paper' }}
+            />
+          </Stack>
+        )}
       </Box>
+
+      {/* Filter Popover */}
+      <Popover
+        open={Boolean(filterAnchorEl)}
+        anchorEl={filterAnchorEl}
+        onClose={() => setFilterAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        sx={{ mt: 1 }}
+      >
+        <Box sx={{ p: 2, minWidth: 280 }}>
+          <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 2 }}>
+            Filters
+          </Typography>
+          <Stack spacing={1.5}>
+            <FilterButton
+              label="DEO"
+              options={deoOptions}
+              selected={selectedDEONames}
+              onChange={handleDEOChange}
+              fullWidth
+            />
+            <FilterButton
+              label="Province"
+              options={filterOptions?.provinces || []}
+              selected={selectedProvinces}
+              onChange={setSelectedProvinces}
+              fullWidth
+            />
+            <FilterButton
+              label="Status"
+              options={filterOptions?.statuses || []}
+              selected={selectedStatuses}
+              onChange={setSelectedStatuses}
+              fullWidth
+            />
+            <FilterButton
+              label="Fund Year"
+              options={fundYearOptions}
+              selected={selectedFundYearStrings}
+              onChange={handleFundYearChange}
+              fullWidth
+            />
+            <FilterButton
+              label="Fund Source"
+              options={filterOptions?.fund_sources || []}
+              selected={selectedFundSources}
+              onChange={setSelectedFundSources}
+              fullWidth
+            />
+            <FilterButton
+              label="Mode of Implementation"
+              options={filterOptions?.modes_of_implementation || []}
+              selected={selectedModes}
+              onChange={setSelectedModes}
+              fullWidth
+            />
+            <FilterButton
+              label="Project Scale"
+              options={filterOptions?.project_scales || []}
+              selected={selectedScales}
+              onChange={setSelectedScales}
+              fullWidth
+            />
+          </Stack>
+          {hasActiveFilters && (
+            <Button
+              fullWidth
+              size="small"
+              startIcon={<X size={16} />}
+              onClick={() => {
+                clearAllFilters();
+                setFilterAnchorEl(null);
+              }}
+              sx={{ mt: 2, textTransform: 'none' }}
+            >
+              Clear All Filters
+            </Button>
+          )}
+        </Box>
+      </Popover>
+
+      {/* Full-screen Map */}
+      <LeafletMap
+        projects={projectsWithGeometry}
+        selectedProjectId={selectedProjectId}
+        onProjectSelect={handleProjectSelect}
+        height="100%"
+        showThemeToggle={false}
+      />
     </Box>
   );
 }

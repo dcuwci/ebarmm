@@ -357,26 +357,7 @@ export default function ProjectList() {
 
   return (
     <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 } }}>
-      {/* Action Buttons */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mb: 2 }}>
-        <Button
-          variant="secondary"
-          onClick={handleExportCSV}
-          disabled={!filteredProjects.length}
-          startIcon={<Download size={20} />}
-        >
-          Export CSV
-        </Button>
-        <Button
-          variant="primary"
-          onClick={() => navigate('/admin/projects/new')}
-          startIcon={<Plus size={20} />}
-        >
-          New Project
-        </Button>
-      </Box>
-
-      {/* Dashboard Filters */}
+      {/* Dashboard Filters with Action Buttons */}
       <DashboardFilter
         filterOptions={filterOptions || null}
         filterOptionsLoading={filterOptionsLoading}
@@ -398,6 +379,25 @@ export default function ProjectList() {
         onScaleChange={(value) => { setSelectedScales(value); handleFilterChange(); }}
         onRefresh={handleRefresh}
         loading={projectsLoading}
+        actionButtons={
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="secondary"
+              onClick={handleExportCSV}
+              disabled={!filteredProjects.length}
+              startIcon={<Download size={18} />}
+            >
+              Export
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => navigate('/admin/projects/new')}
+              startIcon={<Plus size={18} />}
+            >
+              New Project
+            </Button>
+          </Box>
+        }
       />
 
       {/* Results Summary */}
