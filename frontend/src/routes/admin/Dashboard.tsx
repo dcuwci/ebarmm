@@ -217,9 +217,10 @@ export default function Dashboard() {
     {
       key: 'project_title',
       header: 'Project',
+      minWidth: 200,
       render: (row) => (
         <Box>
-          <Typography variant="body2" fontWeight={500}>
+          <Typography variant="body2" fontWeight={500} sx={{ wordBreak: 'break-word' }}>
             {row.project_title}
           </Typography>
           {row.deo_name && (
@@ -234,12 +235,13 @@ export default function Dashboard() {
       key: 'current_progress',
       header: 'Progress',
       align: 'center',
+      minWidth: 140,
       render: (row) => (
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
           <LinearProgress
             variant="determinate"
             value={row.current_progress}
-            sx={{ width: 80, height: 6, borderRadius: 1 }}
+            sx={{ width: { xs: 50, sm: 80 }, height: 6, borderRadius: 1 }}
           />
           <Typography variant="body2" fontWeight={500}>
             {row.current_progress.toFixed(0)}%
@@ -251,6 +253,7 @@ export default function Dashboard() {
       key: 'status',
       header: 'Status',
       align: 'center',
+      minWidth: 100,
       render: (row) => (
         <Chip
           label={row.status.charAt(0).toUpperCase() + row.status.slice(1)}
@@ -266,17 +269,26 @@ export default function Dashboard() {
   };
 
   return (
-    <Box sx={{ maxWidth: 1280, mx: 'auto', px: { xs: 2, sm: 3, lg: 4 }, py: 4 }}>
+    <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 } }}>
       {/* Welcome Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" fontWeight={700}>
-          Welcome back, {user?.username}
-        </Typography>
-        <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-          {user?.role === 'super_admin' && 'System Administrator Dashboard'}
-          {user?.role === 'regional_admin' && 'Regional Administrator Dashboard'}
-          {user?.role === 'deo_user' && 'DEO User Dashboard'}
-        </Typography>
+      <Box sx={{
+        display: 'flex',
+        flexDirection: { xs: 'column', sm: 'row' },
+        justifyContent: 'space-between',
+        alignItems: { xs: 'flex-start', sm: 'center' },
+        gap: 2,
+        mb: 3
+      }}>
+        <Box>
+          <Typography variant="h4" fontWeight={700} sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
+            Welcome back, {user?.username}
+          </Typography>
+          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+            {user?.role === 'super_admin' && 'System Administrator Dashboard'}
+            {user?.role === 'regional_admin' && 'Regional Administrator Dashboard'}
+            {user?.role === 'deo_user' && 'DEO User Dashboard'}
+          </Typography>
+        </Box>
       </Box>
 
       {/* Dashboard Filters */}

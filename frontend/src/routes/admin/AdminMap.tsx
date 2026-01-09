@@ -3,7 +3,7 @@
  * Displays projects with geometry on an interactive map within the admin layout
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
@@ -14,14 +14,29 @@ import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import IconButton from '@mui/material/IconButton';
-import TextField from '@mui/material/TextField';
-import InputAdornment from '@mui/material/InputAdornment';
 import LinearProgress from '@mui/material/LinearProgress';
 import Tooltip from '@mui/material/Tooltip';
-import { Search, X, MapPin } from 'lucide-react';
+import { X, MapPin, List as ListIcon } from 'lucide-react';
 import { LeafletMap } from '../../components/map/LeafletMap';
-import { LoadingSpinner } from '../../components/mui';
+import { LoadingSpinner, DashboardFilter } from '../../components/mui';
 import { apiClient } from '../../api/client';
+
+interface DEO {
+  deo_id: number;
+  deo_name: string;
+  province: string;
+  project_count: number;
+}
+
+interface FilterOptions {
+  deos: DEO[];
+  provinces: string[];
+  statuses: string[];
+  fund_years: number[];
+  fund_sources: string[];
+  modes_of_implementation: string[];
+  project_scales: string[];
+}
 
 interface Project {
   project_id: string;
@@ -31,7 +46,12 @@ interface Project {
   geometry_wkt?: string;
   current_progress?: number;
   project_cost?: number;
+  deo_id: number;
   deo_name?: string;
+  fund_source?: string;
+  mode_of_implementation?: string;
+  project_scale?: string;
+  fund_year?: number;
 }
 
 interface ProjectsResponse {
@@ -49,11 +69,30 @@ const STATUS_COLORS: Record<string, 'default' | 'primary' | 'success' | 'warning
 
 export default function AdminMap() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>();
-  const [searchTerm, setSearchTerm] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  // Filter state
+  const [search, setSearch] = useState('');
+  const [selectedDEOs, setSelectedDEOs] = useState<number[]>([]);
+  const [selectedProvinces, setSelectedProvinces] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [selectedFundYears, setSelectedFundYears] = useState<number[]>([]);
+  const [selectedFundSources, setSelectedFundSources] = useState<string[]>([]);
+  const [selectedModes, setSelectedModes] = useState<string[]>([]);
+  const [selectedScales, setSelectedScales] = useState<string[]>([]);
+
+  // Fetch filter options
+  const { data: filterOptions, isLoading: filterOptionsLoading } = useQuery({
+    queryKey: ['filterOptions'],
+    queryFn: async () => {
+      const response = await apiClient.get('/public/filter-options');
+      return response.data as FilterOptions;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Fetch all projects with geometry (using public endpoint which includes geometry_wkt)
-  const { data, isLoading, error } = useQuery<ProjectsResponse>({
+  const { data, isLoading, error, refetch: refetchProjects } = useQuery<ProjectsResponse>({
     queryKey: ['adminProjectsMap'],
     queryFn: async () => {
       const response = await apiClient.get('/public/projects?limit=200');
@@ -61,30 +100,74 @@ export default function AdminMap() {
     },
   });
 
-  // Filter projects that have geometry and match search
-  const projectsWithGeometry = useMemo(() => {
-    if (!data?.items) return [];
-    return data.items.filter((p) => {
-      const matchesSearch = !searchTerm ||
-        p.project_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.location?.toLowerCase().includes(searchTerm.toLowerCase());
-      return p.geometry_wkt && matchesSearch;
-    });
-  }, [data, searchTerm]);
-
-  // All projects for sidebar list (with or without geometry)
+  // Apply client-side filtering
   const filteredProjects = useMemo(() => {
     if (!data?.items) return [];
-    if (!searchTerm) return data.items;
-    return data.items.filter((p) =>
-      p.project_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.location?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [data, searchTerm]);
+
+    let items = data.items;
+
+    // Search filter
+    if (search) {
+      const searchLower = search.toLowerCase();
+      items = items.filter((p) =>
+        p.project_title.toLowerCase().includes(searchLower) ||
+        p.location?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // DEO filter
+    if (selectedDEOs.length > 0) {
+      items = items.filter((p) => selectedDEOs.includes(p.deo_id));
+    }
+
+    // Status filter
+    if (selectedStatuses.length > 0) {
+      items = items.filter((p) => selectedStatuses.includes(p.status));
+    }
+
+    // Fund Year filter
+    if (selectedFundYears.length > 0) {
+      items = items.filter((p) => p.fund_year && selectedFundYears.includes(p.fund_year));
+    }
+
+    // Province filter
+    if (selectedProvinces.length > 0 && filterOptions) {
+      const deoIdsInProvinces = filterOptions.deos
+        .filter((d) => selectedProvinces.includes(d.province))
+        .map((d) => d.deo_id);
+      items = items.filter((p) => deoIdsInProvinces.includes(p.deo_id));
+    }
+
+    // Fund Source filter
+    if (selectedFundSources.length > 0) {
+      items = items.filter((p) => p.fund_source && selectedFundSources.includes(p.fund_source));
+    }
+
+    // Mode of Implementation filter
+    if (selectedModes.length > 0) {
+      items = items.filter((p) => p.mode_of_implementation && selectedModes.includes(p.mode_of_implementation));
+    }
+
+    // Project Scale filter
+    if (selectedScales.length > 0) {
+      items = items.filter((p) => p.project_scale && selectedScales.includes(p.project_scale));
+    }
+
+    return items;
+  }, [data, search, selectedDEOs, selectedStatuses, selectedFundYears, selectedProvinces, selectedFundSources, selectedModes, selectedScales, filterOptions]);
+
+  // Filter projects that have geometry for the map
+  const projectsWithGeometry = useMemo(() => {
+    return filteredProjects.filter((p) => p.geometry_wkt);
+  }, [filteredProjects]);
 
   const handleProjectSelect = (project: { project_id: string }) => {
     setSelectedProjectId(project.project_id);
   };
+
+  const handleRefresh = useCallback(() => {
+    refetchProjects();
+  }, [refetchProjects]);
 
   if (isLoading) {
     return (
@@ -103,49 +186,61 @@ export default function AdminMap() {
   }
 
   return (
-    <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
-      {/* Sidebar */}
-      {sidebarOpen && (
-        <Paper
-          elevation={2}
-          sx={{
-            width: 350,
-            display: 'flex',
-            flexDirection: 'column',
-            borderRadius: 0,
-            zIndex: 1000,
-          }}
-        >
-          {/* Header */}
-          <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="h6" fontWeight={600}>
-                Projects
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
+      {/* Dashboard Filter */}
+      <Box sx={{ px: { xs: 1, sm: 2 }, pt: { xs: 1, sm: 2 }, flexShrink: 0 }}>
+        <DashboardFilter
+          filterOptions={filterOptions || null}
+          filterOptionsLoading={filterOptionsLoading}
+          search={search}
+          onSearchChange={setSearch}
+          selectedDEOs={selectedDEOs}
+          onDEOChange={setSelectedDEOs}
+          selectedProvinces={selectedProvinces}
+          onProvinceChange={setSelectedProvinces}
+          selectedStatuses={selectedStatuses}
+          onStatusChange={setSelectedStatuses}
+          selectedFundYears={selectedFundYears}
+          onFundYearChange={setSelectedFundYears}
+          selectedFundSources={selectedFundSources}
+          onFundSourceChange={setSelectedFundSources}
+          selectedModes={selectedModes}
+          onModeChange={setSelectedModes}
+          selectedScales={selectedScales}
+          onScaleChange={setSelectedScales}
+          onRefresh={handleRefresh}
+          loading={isLoading}
+        />
+      </Box>
+
+      {/* Map and Sidebar Container */}
+      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Sidebar */}
+        {sidebarOpen && (
+          <Paper
+            elevation={2}
+            sx={{
+              width: { xs: 280, sm: 320 },
+              display: 'flex',
+              flexDirection: 'column',
+              borderRadius: 0,
+              zIndex: 1000,
+            }}
+          >
+            {/* Header */}
+            <Box sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="subtitle1" fontWeight={600}>
+                  Projects ({filteredProjects.length})
+                </Typography>
+                <IconButton size="small" onClick={() => setSidebarOpen(false)}>
+                  <X size={18} />
+                </IconButton>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                {projectsWithGeometry.length} with map location
               </Typography>
-              <IconButton size="small" onClick={() => setSidebarOpen(false)}>
-                <X size={20} />
-              </IconButton>
             </Box>
-
-            <TextField
-              size="small"
-              fullWidth
-              placeholder="Search projects..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search size={18} />
-                  </InputAdornment>
-                ),
-              }}
-            />
-
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              {projectsWithGeometry.length} of {data?.total || 0} projects on map
-            </Typography>
-          </Box>
 
           {/* Project List */}
           <Box sx={{ flex: 1, overflow: 'auto' }}>
@@ -238,7 +333,7 @@ export default function AdminMap() {
                   '&:hover': { bgcolor: 'background.paper' },
                 }}
               >
-                <Search size={20} />
+                <ListIcon size={20} />
               </IconButton>
             </Tooltip>
           </Box>
@@ -251,6 +346,7 @@ export default function AdminMap() {
           height="100%"
           showThemeToggle={true}
         />
+        </Box>
       </Box>
     </Box>
   );

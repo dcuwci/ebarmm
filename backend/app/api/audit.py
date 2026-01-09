@@ -330,7 +330,7 @@ async def get_timeline_statistics(
 async def get_entity_audit_history(
     entity_type: str,
     entity_id: UUID,
-    current_user: User = Depends(require_role(['super_admin', 'admin', 'deo_focal'])),
+    current_user: User = Depends(require_role(['super_admin', 'regional_admin', 'deo_user'])),
     db: Session = Depends(get_db)
 ):
     """
@@ -340,9 +340,36 @@ async def get_entity_audit_history(
     showing the complete change history. For projects, also includes
     related entity changes (GIS features, media, progress logs).
 
-    RBAC: super_admin, admin, deo_focal (for viewing project history)
+    RBAC: super_admin, regional_admin, deo_user (for viewing project history)
     """
+    from ..models import Project, DEO
+
     entity_id_str = str(entity_id)
+
+    # For projects, check RBAC access
+    if entity_type == "project":
+        project = db.query(Project).filter(Project.project_id == entity_id).first()
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found"
+            )
+
+        # DEO users can only view audit history for their own projects
+        if current_user.role == "deo_user" and project.deo_id != current_user.deo_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this project's audit history"
+            )
+
+        # Regional admins can only view projects in their region
+        if current_user.role == "regional_admin":
+            deo = db.query(DEO).filter(DEO.deo_id == project.deo_id).first()
+            if deo and deo.region != current_user.region:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied to this project's audit history"
+                )
 
     # For projects, also get related entities (GIS, media, progress)
     if entity_type == "project":

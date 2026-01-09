@@ -189,7 +189,12 @@ export function DashboardFilter({
       </Box>
       <Collapse in={expanded}>
         {/* Search and Filter Buttons */}
-        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Box sx={{
+          display: 'flex',
+          gap: { xs: 1, sm: 1.5 },
+          flexWrap: 'wrap',
+          alignItems: 'center'
+        }}>
           {/* Search */}
           <TextField
             size="small"
@@ -203,7 +208,7 @@ export function DashboardFilter({
                   </InputAdornment>
                 ),
             }}
-            sx={{ minWidth: 200 }}
+            sx={{ minWidth: { xs: '100%', sm: 200 }, flex: { xs: '1 1 100%', sm: '0 0 auto' } }}
           />
           {/* DEO Filter */}
           <FilterButton
@@ -270,7 +275,7 @@ export function DashboardFilter({
               <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
                 Active Filters:
               </Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Stack direction="row" spacing={0.5} sx={{ gap: { xs: 0.5, sm: 1 } }} flexWrap="wrap" useFlexGap>
                 {search && (
                   <Chip
                     label={`Search: "${search}"`}

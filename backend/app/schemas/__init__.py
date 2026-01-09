@@ -194,14 +194,18 @@ class ProjectCreate(ProjectBase):
 
 
 class ProjectUpdate(BaseModel):
-    """Project update request (limited fields)"""
+    """Project update request"""
     project_title: Optional[constr(min_length=1, max_length=500)] = None
     location: Optional[str] = None
+    fund_source: Optional[str] = None
+    mode_of_implementation: Optional[str] = None
+    project_cost: Optional[confloat(ge=0)] = None
+    project_scale: Optional[str] = None
+    fund_year: Optional[int] = Field(None, ge=2010, le=2050)
     status: Optional[str] = Field(
         None,
         pattern=r'^(planning|ongoing|completed|suspended|cancelled|deleted)$'
     )
-    project_cost: Optional[confloat(ge=0)] = None
 
 
 class ProjectResponse(ProjectBase):

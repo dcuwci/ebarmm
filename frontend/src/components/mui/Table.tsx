@@ -9,6 +9,8 @@ import TablePagination from '@mui/material/TablePagination';
 import Paper from '@mui/material/Paper';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import { LoadingSpinner } from './Loading';
 
 export interface Column<T> {
@@ -17,6 +19,12 @@ export interface Column<T> {
   render?: (row: T) => React.ReactNode;
   width?: string | number;
   align?: 'left' | 'center' | 'right';
+  /** Hide column on mobile (< 600px) */
+  hideOnMobile?: boolean;
+  /** Hide column on tablet (< 900px) */
+  hideOnTablet?: boolean;
+  /** Minimum width for this column */
+  minWidth?: number;
 }
 
 interface TableProps<T> {
@@ -26,6 +34,8 @@ interface TableProps<T> {
   emptyMessage?: string;
   onRowClick?: (row: T) => void;
   rowKey: (row: T) => string | number;
+  /** Minimum width for the table (enables horizontal scroll) */
+  minWidth?: number;
 }
 
 export function Table<T>({
@@ -35,7 +45,19 @@ export function Table<T>({
   emptyMessage = 'No data available',
   onRowClick,
   rowKey,
+  minWidth = 650,
 }: TableProps<T>) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Filter columns based on screen size
+  const visibleColumns = columns.filter((col) => {
+    if (isMobile && col.hideOnMobile) return false;
+    if (isTablet && col.hideOnTablet) return false;
+    return true;
+  });
+
   if (loading) {
     return (
       <Box
@@ -60,11 +82,27 @@ export function Table<T>({
   }
 
   return (
-    <TableContainer component={Paper} elevation={0}>
-      <MuiTable>
+    <TableContainer
+      component={Paper}
+      elevation={0}
+      sx={{
+        overflowX: 'auto',
+        '&::-webkit-scrollbar': {
+          height: 8,
+        },
+        '&::-webkit-scrollbar-track': {
+          bgcolor: 'action.hover',
+        },
+        '&::-webkit-scrollbar-thumb': {
+          bgcolor: 'action.disabled',
+          borderRadius: 4,
+        },
+      }}
+    >
+      <MuiTable sx={{ minWidth }}>
         <TableHead>
           <TableRow sx={{ bgcolor: 'action.hover' }}>
-            {columns.map((column) => (
+            {visibleColumns.map((column) => (
               <TableCell
                 key={column.key}
                 align={column.align || 'left'}
@@ -74,6 +112,8 @@ export function Table<T>({
                   textTransform: 'uppercase',
                   letterSpacing: 0.5,
                   width: column.width,
+                  minWidth: column.minWidth,
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {column.header}
@@ -92,8 +132,12 @@ export function Table<T>({
                 '&:last-child td, &:last-child th': { border: 0 },
               }}
             >
-              {columns.map((column) => (
-                <TableCell key={column.key} align={column.align || 'left'}>
+              {visibleColumns.map((column) => (
+                <TableCell
+                  key={column.key}
+                  align={column.align || 'left'}
+                  sx={{ minWidth: column.minWidth }}
+                >
                   {column.render
                     ? column.render(row)
                     : String((row as Record<string, unknown>)[column.key] ?? '')}
@@ -135,6 +179,14 @@ export const Pagination: React.FC<PaginationProps> = ({
       sx={{
         borderTop: 1,
         borderColor: 'divider',
+        '& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows': {
+          fontSize: { xs: '0.75rem', sm: '0.875rem' },
+        },
+        '& .MuiTablePagination-toolbar': {
+          flexWrap: 'wrap',
+          justifyContent: { xs: 'center', sm: 'flex-end' },
+          px: { xs: 1, sm: 2 },
+        },
       }}
     />
   );

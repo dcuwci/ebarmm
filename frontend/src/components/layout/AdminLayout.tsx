@@ -67,7 +67,7 @@ const navItems: NavItem[] = [
       { label: 'Users', icon: <Users size={18} />, path: '/admin/settings/users' },
       { label: 'Groups', icon: <Shield size={18} />, path: '/admin/settings/groups' },
       { label: 'Access Rights', icon: <Key size={18} />, path: '/admin/settings/access-rights' },
-      { label: 'Audit Logs', icon: <History size={18} />, path: '/admin/settings/audit-logs' },
+      { label: 'Audit Logs', icon: <History size={18} />, path: '/admin/settings/audit-logs', roles: ['super_admin'] },
     ],
   },
 ];
@@ -272,7 +272,9 @@ export default function AdminLayout() {
                     </ListItemButton>
                     <Collapse in={settingsOpen && drawerOpen} timeout="auto" unmountOnExit>
                       <List component="div" disablePadding>
-                        {item.children.map((child) => (
+                        {item.children
+                          .filter((child) => !child.roles || child.roles.includes(user?.role || ''))
+                          .map((child) => (
                           <ListItemButton
                             key={child.path}
                             onClick={() => navigate(child.path)}

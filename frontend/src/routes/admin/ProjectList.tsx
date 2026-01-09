@@ -3,44 +3,45 @@
  * Admin interface for viewing and managing projects
  */
 
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Paper from '@mui/material/Paper'
-import TextField from '@mui/material/TextField'
-import InputAdornment from '@mui/material/InputAdornment'
-import MenuItem from '@mui/material/MenuItem'
-import Select from '@mui/material/Select'
-import FormControl from '@mui/material/FormControl'
-import InputLabel from '@mui/material/InputLabel'
 import Chip from '@mui/material/Chip'
 import LinearProgress from '@mui/material/LinearProgress'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import TablePagination from '@mui/material/TablePagination'
 import {
-  Search,
   Download,
   Plus,
   Eye,
   Edit,
 } from 'lucide-react'
-import { Button, Table, LoadingSpinner } from '../../components/mui'
+import { Button, Table, LoadingSpinner, DashboardFilter } from '../../components/mui'
 import type { Column } from '../../components/mui'
-import { fetchProjects } from '../../api/projects'
+import { apiClient } from '../../api/client'
 import type { Project, ProjectStatus } from '../../types/project'
 import { format } from 'date-fns'
 
-const STATUS_OPTIONS: { value: ProjectStatus | ''; label: string }[] = [
-  { value: '', label: 'All Statuses' },
-  { value: 'planning', label: 'Planning' },
-  { value: 'ongoing', label: 'Ongoing' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'suspended', label: 'Suspended' },
-  { value: 'cancelled', label: 'Cancelled' },
-]
+interface DEO {
+  deo_id: number;
+  deo_name: string;
+  province: string;
+  project_count: number;
+}
+
+interface FilterOptions {
+  deos: DEO[];
+  provinces: string[];
+  statuses: string[];
+  fund_years: number[];
+  fund_sources: string[];
+  modes_of_implementation: string[];
+  project_scales: string[];
+}
 
 const getStatusColor = (status: ProjectStatus): 'default' | 'primary' | 'success' | 'warning' | 'error' => {
   const colors: Record<ProjectStatus, 'default' | 'primary' | 'success' | 'warning' | 'error'> = {
@@ -56,31 +57,122 @@ const getStatusColor = (status: ProjectStatus): 'default' | 'primary' | 'success
 
 export default function ProjectList() {
   const navigate = useNavigate()
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<ProjectStatus | ''>('')
   const [currentPage, setCurrentPage] = useState(0)
   const [itemsPerPage, setItemsPerPage] = useState(25)
 
-  // Calculate offset
-  const offset = currentPage * itemsPerPage
+  // Filter state (same as Dashboard)
+  const [search, setSearch] = useState('')
+  const [selectedDEOs, setSelectedDEOs] = useState<number[]>([])
+  const [selectedProvinces, setSelectedProvinces] = useState<string[]>([])
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([])
+  const [selectedFundYears, setSelectedFundYears] = useState<number[]>([])
+  const [selectedFundSources, setSelectedFundSources] = useState<string[]>([])
+  const [selectedModes, setSelectedModes] = useState<string[]>([])
+  const [selectedScales, setSelectedScales] = useState<string[]>([])
+
+  // Fetch filter options
+  const { data: filterOptions, isLoading: filterOptionsLoading } = useQuery({
+    queryKey: ['filterOptions'],
+    queryFn: async () => {
+      const response = await apiClient.get('/public/filter-options')
+      return response.data as FilterOptions
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // Build query params for API call
+  const buildQueryParams = useCallback(() => {
+    const params = new URLSearchParams()
+    params.append('limit', '500')
+
+    if (search) params.append('search', search)
+
+    // For API, send single values; multi-select is filtered client-side
+    if (selectedDEOs.length === 1) {
+      params.append('deo_id', selectedDEOs[0].toString())
+    }
+    if (selectedStatuses.length === 1) {
+      params.append('status', selectedStatuses[0])
+    }
+    if (selectedFundYears.length === 1) {
+      params.append('fund_year', selectedFundYears[0].toString())
+    }
+    if (selectedProvinces.length === 1) {
+      params.append('province', selectedProvinces[0])
+    }
+    if (selectedFundSources.length === 1) {
+      params.append('fund_source', selectedFundSources[0])
+    }
+    if (selectedModes.length === 1) {
+      params.append('mode_of_implementation', selectedModes[0])
+    }
+    if (selectedScales.length === 1) {
+      params.append('project_scale', selectedScales[0])
+    }
+
+    return params.toString()
+  }, [search, selectedDEOs, selectedStatuses, selectedFundYears, selectedProvinces, selectedFundSources, selectedModes, selectedScales])
 
   // Fetch projects
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['projects', { search, status, limit: itemsPerPage, offset }],
-    queryFn: () =>
-      fetchProjects({
-        search: search || undefined,
-        status: status || undefined,
-        limit: itemsPerPage,
-        offset,
-      }),
+  const { data: projectsData, isLoading: projectsLoading, refetch: refetchProjects } = useQuery({
+    queryKey: ['projects', buildQueryParams()],
+    queryFn: async () => {
+      const queryString = buildQueryParams()
+      const response = await apiClient.get(`/projects?${queryString}`)
+      return response.data
+    },
   })
+
+  // Apply client-side filtering for multi-select
+  const filteredProjects = useMemo(() => {
+    if (!projectsData?.items) return []
+
+    let items = projectsData.items as Project[]
+
+    if (selectedDEOs.length > 1) {
+      items = items.filter((p) => selectedDEOs.includes(p.deo_id))
+    }
+    if (selectedStatuses.length > 1) {
+      items = items.filter((p) => selectedStatuses.includes(p.status))
+    }
+    if (selectedFundYears.length > 1) {
+      items = items.filter((p) => p.fund_year && selectedFundYears.includes(p.fund_year))
+    }
+    if (selectedProvinces.length > 1 && filterOptions) {
+      const deoIdsInProvinces = filterOptions.deos
+        .filter((d) => selectedProvinces.includes(d.province))
+        .map((d) => d.deo_id)
+      items = items.filter((p) => deoIdsInProvinces.includes(p.deo_id))
+    }
+    if (selectedFundSources.length > 1) {
+      items = items.filter((p) => p.fund_source && selectedFundSources.includes(p.fund_source))
+    }
+    if (selectedModes.length > 1) {
+      items = items.filter((p) => p.mode_of_implementation && selectedModes.includes(p.mode_of_implementation))
+    }
+    if (selectedScales.length > 1) {
+      items = items.filter((p) => p.project_scale && selectedScales.includes(p.project_scale))
+    }
+
+    return items
+  }, [projectsData, selectedDEOs, selectedStatuses, selectedFundYears, selectedProvinces, selectedFundSources, selectedModes, selectedScales, filterOptions])
+
+  // Paginate filtered results
+  const paginatedProjects = useMemo(() => {
+    const start = currentPage * itemsPerPage
+    return filteredProjects.slice(start, start + itemsPerPage)
+  }, [filteredProjects, currentPage, itemsPerPage])
+
+  // Reset page when filters change
+  const handleFilterChange = useCallback(() => {
+    setCurrentPage(0)
+  }, [])
 
   /**
    * Export to CSV
    */
   const handleExportCSV = () => {
-    if (!data?.items.length) return
+    if (!filteredProjects.length) return
 
     const headers = [
       'Project ID',
@@ -97,7 +189,7 @@ export default function ProjectList() {
       'Created At',
     ]
 
-    const rows = data.items.map((project) => [
+    const rows = filteredProjects.map((project) => [
       project.project_id,
       project.deo_name || '',
       project.project_title,
@@ -137,13 +229,18 @@ export default function ProjectList() {
     }).format(amount)
   }
 
+  const handleRefresh = () => {
+    refetchProjects()
+  }
+
   const columns: Column<Project>[] = [
     {
       key: 'project_title',
       header: 'Project',
+      minWidth: 200,
       render: (row) => (
         <Box>
-          <Typography variant="body2" fontWeight={500}>
+          <Typography variant="body2" fontWeight={500} sx={{ wordBreak: 'break-word' }}>
             {row.project_title}
           </Typography>
           <Typography variant="caption" color="text.secondary">
@@ -155,6 +252,8 @@ export default function ProjectList() {
     {
       key: 'deo_name',
       header: 'DEO',
+      hideOnMobile: true,
+      minWidth: 120,
       render: (row) => (
         <Typography variant="body2">{row.deo_name}</Typography>
       ),
@@ -162,8 +261,11 @@ export default function ProjectList() {
     {
       key: 'location',
       header: 'Location',
+      hideOnMobile: true,
+      hideOnTablet: true,
+      minWidth: 150,
       render: (row) => (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
           {row.location || '—'}
         </Typography>
       ),
@@ -171,6 +273,8 @@ export default function ProjectList() {
     {
       key: 'project_cost',
       header: 'Cost',
+      hideOnMobile: true,
+      minWidth: 100,
       render: (row) => (
         <Typography variant="body2">{formatCurrency(row.project_cost)}</Typography>
       ),
@@ -178,6 +282,9 @@ export default function ProjectList() {
     {
       key: 'fund_year',
       header: 'Year',
+      hideOnMobile: true,
+      hideOnTablet: true,
+      minWidth: 60,
       render: (row) => (
         <Typography variant="body2" color="text.secondary">
           {row.fund_year}
@@ -188,6 +295,7 @@ export default function ProjectList() {
       key: 'status',
       header: 'Status',
       align: 'center',
+      minWidth: 90,
       render: (row) => (
         <Chip
           label={row.status.charAt(0).toUpperCase() + row.status.slice(1)}
@@ -199,6 +307,7 @@ export default function ProjectList() {
     {
       key: 'current_progress',
       header: 'Progress',
+      minWidth: 120,
       render: (row) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <LinearProgress
@@ -216,6 +325,7 @@ export default function ProjectList() {
       key: 'actions',
       header: 'Actions',
       align: 'right',
+      minWidth: 80,
       render: (row) => (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
           <Tooltip title="View details">
@@ -246,100 +356,85 @@ export default function ProjectList() {
   ]
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 } }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+      <Box sx={{
+        display: 'flex',
+        flexDirection: { xs: 'column', sm: 'row' },
+        justifyContent: 'space-between',
+        alignItems: { xs: 'flex-start', sm: 'center' },
+        gap: 2,
+        mb: 3
+      }}>
         <Box>
-          <Typography variant="h4" fontWeight={700}>
+          <Typography variant="h4" fontWeight={700} sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
             Projects
           </Typography>
           <Typography color="text.secondary" sx={{ mt: 0.5 }}>
             Manage infrastructure projects across BARMM
           </Typography>
         </Box>
-        <Button
-          variant="primary"
-          onClick={() => navigate('/admin/projects/new')}
-          startIcon={<Plus size={20} />}
-        >
-          New Project
-        </Button>
-      </Box>
-
-      {/* Filters */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <TextField
-            placeholder="Search by title or location..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setCurrentPage(0)
-            }}
-            size="small"
-            sx={{ minWidth: 300, flex: 1 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search size={20} color="#9e9e9e" />
-                </InputAdornment>
-              ),
-            }}
-          />
-
-          <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel>Status</InputLabel>
-            <Select
-              value={status}
-              label="Status"
-              onChange={(e) => {
-                setStatus(e.target.value as ProjectStatus | '')
-                setCurrentPage(0)
-              }}
-            >
-              {STATUS_OPTIONS.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Button
             variant="secondary"
             onClick={handleExportCSV}
-            disabled={!data?.items.length}
+            disabled={!filteredProjects.length}
             startIcon={<Download size={20} />}
           >
             Export CSV
           </Button>
+          <Button
+            variant="primary"
+            onClick={() => navigate('/admin/projects/new')}
+            startIcon={<Plus size={20} />}
+          >
+            New Project
+          </Button>
         </Box>
-      </Paper>
+      </Box>
+
+      {/* Dashboard Filters */}
+      <DashboardFilter
+        filterOptions={filterOptions || null}
+        filterOptionsLoading={filterOptionsLoading}
+        search={search}
+        onSearchChange={(value) => { setSearch(value); handleFilterChange(); }}
+        selectedDEOs={selectedDEOs}
+        onDEOChange={(value) => { setSelectedDEOs(value); handleFilterChange(); }}
+        selectedProvinces={selectedProvinces}
+        onProvinceChange={(value) => { setSelectedProvinces(value); handleFilterChange(); }}
+        selectedStatuses={selectedStatuses}
+        onStatusChange={(value) => { setSelectedStatuses(value); handleFilterChange(); }}
+        selectedFundYears={selectedFundYears}
+        onFundYearChange={(value) => { setSelectedFundYears(value); handleFilterChange(); }}
+        selectedFundSources={selectedFundSources}
+        onFundSourceChange={(value) => { setSelectedFundSources(value); handleFilterChange(); }}
+        selectedModes={selectedModes}
+        onModeChange={(value) => { setSelectedModes(value); handleFilterChange(); }}
+        selectedScales={selectedScales}
+        onScaleChange={(value) => { setSelectedScales(value); handleFilterChange(); }}
+        onRefresh={handleRefresh}
+        loading={projectsLoading}
+      />
 
       {/* Results Summary */}
-      {data && (
+      {filteredProjects.length > 0 && (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Showing {offset + 1} - {Math.min(offset + itemsPerPage, data.total)} of{' '}
-          {data.total} projects
+          Showing {currentPage * itemsPerPage + 1} - {Math.min((currentPage + 1) * itemsPerPage, filteredProjects.length)} of{' '}
+          {filteredProjects.length} projects
         </Typography>
       )}
 
       {/* Table */}
       <Paper sx={{ overflow: 'hidden' }}>
-        {isLoading ? (
+        {projectsLoading ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 6 }}>
             <LoadingSpinner size="lg" />
             <Typography color="text.secondary" sx={{ mt: 2 }}>
               Loading projects...
             </Typography>
           </Box>
-        ) : error ? (
-          <Box sx={{ textAlign: 'center', py: 6 }}>
-            <Typography color="error">
-              Error loading projects. Please try again.
-            </Typography>
-          </Box>
-        ) : !data?.items.length ? (
+        ) : !filteredProjects.length ? (
           <Box sx={{ textAlign: 'center', py: 6 }}>
             <Typography color="text.secondary">
               No projects found. Try adjusting your filters or create a new project.
@@ -349,13 +444,13 @@ export default function ProjectList() {
           <>
             <Table
               columns={columns}
-              data={data.items}
+              data={paginatedProjects}
               rowKey={(row) => row.project_id}
               onRowClick={(row) => navigate(`/admin/projects/${row.project_id}`)}
             />
             <TablePagination
               component="div"
-              count={data.total}
+              count={filteredProjects.length}
               page={currentPage}
               onPageChange={(_, newPage) => setCurrentPage(newPage)}
               rowsPerPage={itemsPerPage}

@@ -5,6 +5,8 @@ import MenuItem from '@mui/material/MenuItem';
 import Checkbox from '@mui/material/Checkbox';
 import ListItemText from '@mui/material/ListItemText';
 import Badge from '@mui/material/Badge';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import { ChevronDown } from 'lucide-react';
 
 interface FilterButtonProps {
@@ -22,6 +24,8 @@ export function FilterButton({
   onChange,
   disabled = false,
 }: FilterButtonProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
@@ -69,8 +73,11 @@ export function FilterButton({
           size="small"
           sx={{
             textTransform: 'none',
-            minWidth: 120,
+            minWidth: { xs: isMobile ? 'auto' : 100, sm: 120 },
+            flex: { xs: '1 1 calc(50% - 8px)', sm: '0 0 auto' },
             justifyContent: 'space-between',
+            fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+            px: { xs: 1, sm: 1.5 },
           }}
         >
           {label}

@@ -71,7 +71,14 @@ function App() {
           <Route path="settings/users" element={<UsersSettings />} />
           <Route path="settings/groups" element={<GroupsSettings />} />
           <Route path="settings/access-rights" element={<AccessRightsSettings />} />
-          <Route path="settings/audit-logs" element={<AuditLogs />} />
+          <Route
+            path="settings/audit-logs"
+            element={
+              <ProtectedRoute allowedRoles={['super_admin']}>
+                <AuditLogs />
+              </ProtectedRoute>
+            }
+          />
         </Route>
 
         {/* 404 */}
