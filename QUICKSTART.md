@@ -13,6 +13,7 @@ Get the system running locally for development.
 - **Docker Desktop** (for PostgreSQL, Redis, MinIO)
 - **Python 3.11+** (for backend)
 - **Node.js 18+** (for frontend)
+- **Android Studio** (for mobile app, optional)
 
 ### Step 1: Start Infrastructure
 
@@ -49,6 +50,23 @@ cd frontend
 npm install  # First time only
 npm run dev
 ```
+
+### Step 4: Run Mobile App (Optional)
+
+**Option A: Android Studio**
+1. Open `mobile/` folder in Android Studio
+2. Wait for Gradle sync to complete
+3. Select device/emulator and click Run
+
+**Option B: Command Line**
+```bash
+cd mobile
+./gradlew.bat assembleDebug   # Windows
+./gradlew assembleDebug       # Linux/Mac
+# APK at: mobile/app/build/outputs/apk/debug/app-debug.apk
+```
+
+**Note:** For physical device, update `API_BASE_URL` in `mobile/app/build.gradle.kts` to your PC's IP address.
 
 ### Access
 
@@ -374,3 +392,5 @@ cd docker && docker-compose -f docker-compose.infrastructure.yml down -v
 - `ARCHITECTURE.md` - System design
 - `API_DESIGN.md` - API specifications
 - `SECURITY.md` - Authentication & RBAC
+- `MOBILE_STRATEGY.md` - Mobile app architecture
+- `mobile/README.md` - Mobile app specific docs

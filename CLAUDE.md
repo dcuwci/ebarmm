@@ -38,6 +38,14 @@ docker-compose logs -f backend          # View service logs
 docker-compose down                     # Stop all
 ```
 
+### Mobile (Android)
+```bash
+cd mobile
+./gradlew.bat clean assembleDebug       # Build debug APK (Windows)
+./gradlew clean assembleDebug           # Build debug APK (Linux/Mac)
+```
+Or open `mobile/` folder in Android Studio and click Run.
+
 ## Architecture
 
 ### Backend (FastAPI)
@@ -64,6 +72,25 @@ frontend/src/
 └── components/          # Reusable UI (layout/, map/, media/, common/)
 ```
 
+### Mobile (Kotlin + Jetpack Compose)
+```
+mobile/app/src/main/java/com/barmm/ebarmm/
+├── MainActivity.kt              # Entry point
+├── navigation/NavGraph.kt       # Navigation with bottom nav (Dashboard, Projects, Map)
+├── presentation/
+│   ├── dashboard/               # Stats cards + recent projects
+│   ├── map/                     # OpenStreetMap view with project geometries
+│   ├── project/                 # Project list
+│   ├── progress/                # Progress report form
+│   └── auth/                    # Login screen
+├── data/
+│   ├── local/database/          # Room database (entities, DAOs)
+│   ├── remote/api/              # Retrofit API interfaces
+│   ├── repository/              # Repository implementations
+│   └── sync/worker/             # WorkManager sync workers
+└── di/                          # Hilt dependency injection modules
+```
+
 ### Key Patterns
 
 **State Management**: Zustand for auth/permissions, TanStack Query for API data
@@ -79,8 +106,9 @@ frontend/src/
 **GIS**: PostGIS for spatial data, Leaflet + react-leaflet for rendering
 
 ### API Communication
-- Base URL: `VITE_API_BASE_URL` (default: `http://localhost:8000/api/v1`)
-- Axios interceptor adds `Authorization: Bearer <token>`
+- Base URL (Frontend): `VITE_API_BASE_URL` (default: `http://localhost:8000/api/v1`)
+- Base URL (Mobile): `API_BASE_URL` in `mobile/app/build.gradle.kts` (default: `http://10.0.2.2:8000` for emulator)
+- Axios/Retrofit interceptor adds `Authorization: Bearer <token>`
 - 401 responses trigger logout + redirect to /login
 
 ### Database
