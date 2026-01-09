@@ -357,40 +357,23 @@ export default function ProjectList() {
 
   return (
     <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 } }}>
-      {/* Header */}
-      <Box sx={{
-        display: 'flex',
-        flexDirection: { xs: 'column', sm: 'row' },
-        justifyContent: 'space-between',
-        alignItems: { xs: 'flex-start', sm: 'center' },
-        gap: 2,
-        mb: 3
-      }}>
-        <Box>
-          <Typography variant="h4" fontWeight={700} sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
-            Projects
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            Manage infrastructure projects across BARMM
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Button
-            variant="secondary"
-            onClick={handleExportCSV}
-            disabled={!filteredProjects.length}
-            startIcon={<Download size={20} />}
-          >
-            Export CSV
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => navigate('/admin/projects/new')}
-            startIcon={<Plus size={20} />}
-          >
-            New Project
-          </Button>
-        </Box>
+      {/* Action Buttons */}
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mb: 2 }}>
+        <Button
+          variant="secondary"
+          onClick={handleExportCSV}
+          disabled={!filteredProjects.length}
+          startIcon={<Download size={20} />}
+        >
+          Export CSV
+        </Button>
+        <Button
+          variant="primary"
+          onClick={() => navigate('/admin/projects/new')}
+          startIcon={<Plus size={20} />}
+        >
+          New Project
+        </Button>
       </Box>
 
       {/* Dashboard Filters */}

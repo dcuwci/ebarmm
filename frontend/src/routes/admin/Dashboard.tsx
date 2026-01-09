@@ -271,24 +271,10 @@ export default function Dashboard() {
   return (
     <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 } }}>
       {/* Welcome Header */}
-      <Box sx={{
-        display: 'flex',
-        flexDirection: { xs: 'column', sm: 'row' },
-        justifyContent: 'space-between',
-        alignItems: { xs: 'flex-start', sm: 'center' },
-        gap: 2,
-        mb: 3
-      }}>
-        <Box>
-          <Typography variant="h4" fontWeight={700} sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
-            Welcome back, {user?.username}
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            {user?.role === 'super_admin' && 'System Administrator Dashboard'}
-            {user?.role === 'regional_admin' && 'Regional Administrator Dashboard'}
-            {user?.role === 'deo_user' && 'DEO User Dashboard'}
-          </Typography>
-        </Box>
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="h6" color="text.secondary">
+          Welcome back, {user?.username}
+        </Typography>
       </Box>
 
       {/* Dashboard Filters */}

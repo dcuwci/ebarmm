@@ -21,12 +21,10 @@ import Avatar from '@mui/material/Avatar';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Tooltip from '@mui/material/Tooltip';
-import Collapse from '@mui/material/Collapse';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 import {
-  Menu as MenuIcon,
   ChevronLeft,
-  ChevronDown,
-  ChevronRight,
   LayoutDashboard,
   FolderKanban,
   Map,
@@ -44,7 +42,6 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 
 const DRAWER_WIDTH = 240;
-const DRAWER_WIDTH_COLLAPSED = 64;
 
 interface NavItem {
   label: string;
@@ -54,10 +51,15 @@ interface NavItem {
   roles?: string[];
 }
 
-const navItems: NavItem[] = [
-  { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/admin' },
-  { label: 'Projects', icon: <FolderKanban size={20} />, path: '/admin/projects' },
-  { label: 'Map View', icon: <Map size={20} />, path: '/admin/map' },
+// Main navigation items shown in header
+const headerNavItems = [
+  { label: 'Dashboard', icon: <LayoutDashboard size={18} />, path: '/admin' },
+  { label: 'Projects', icon: <FolderKanban size={18} />, path: '/admin/projects' },
+  { label: 'Map', icon: <Map size={18} />, path: '/admin/map' },
+];
+
+// Sidebar items (Settings only)
+const sidebarItems: NavItem[] = [
   {
     label: 'Settings',
     icon: <Settings size={20} />,
@@ -78,9 +80,8 @@ export default function AdminLayout() {
   const { mode, toggleTheme } = useTheme();
   const { user, logout } = useAuthStore();
 
-  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false); // Collapsed by default
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleDrawerToggle = () => {
     setDrawerOpen(!drawerOpen);
@@ -100,23 +101,16 @@ export default function AdminLayout() {
     navigate('/login');
   };
 
-  const handleSettingsClick = () => {
-    if (drawerOpen) {
-      setSettingsOpen(!settingsOpen);
-    } else {
-      navigate('/admin/settings/users');
-    }
+  // Get current header tab value
+  const getHeaderTabValue = () => {
+    if (location.pathname === '/admin') return '/admin';
+    if (location.pathname.startsWith('/admin/projects')) return '/admin/projects';
+    if (location.pathname.startsWith('/admin/map')) return '/admin/map';
+    return false; // No tab selected (e.g., settings pages)
   };
 
-  const isActive = (path: string) => {
-    if (path === '/admin') {
-      return location.pathname === '/admin';
-    }
-    return location.pathname.startsWith(path);
-  };
-
-
-  const drawerWidth = drawerOpen ? DRAWER_WIDTH : DRAWER_WIDTH_COLLAPSED;
+  // Check if user has access to settings
+  const hasSettingsAccess = user?.role === 'super_admin' || user?.role === 'regional_admin';
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
@@ -131,17 +125,45 @@ export default function AdminLayout() {
         }}
       >
         <Toolbar>
-          <IconButton
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2 }}
-          >
-            {drawerOpen ? <ChevronLeft size={24} /> : <MenuIcon size={24} />}
-          </IconButton>
+          {/* Settings Toggle - only show if user has access */}
+          {hasSettingsAccess && (
+            <IconButton
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ mr: 2 }}
+            >
+              {drawerOpen ? <ChevronLeft size={24} /> : <Settings size={24} />}
+            </IconButton>
+          )}
 
-          <Typography variant="h6" fontWeight={600} sx={{ flexGrow: 1 }}>
+          <Typography variant="h6" fontWeight={600} sx={{ mr: 4 }}>
             E-BARMM
           </Typography>
+
+          {/* Header Navigation Tabs */}
+          <Tabs
+            value={getHeaderTabValue()}
+            onChange={(_, value) => navigate(value)}
+            sx={{
+              flexGrow: 1,
+              '& .MuiTab-root': {
+                minHeight: 64,
+                textTransform: 'none',
+                fontSize: '0.9rem',
+                fontWeight: 500,
+              },
+            }}
+          >
+            {headerNavItems.map((item) => (
+              <Tab
+                key={item.path}
+                value={item.path}
+                label={item.label}
+                icon={item.icon}
+                iconPosition="start"
+              />
+            ))}
+          </Tabs>
 
           {/* Theme Toggle */}
           <Tooltip title={mode === 'dark' ? 'Light mode' : 'Dark mode'}>
@@ -191,54 +213,54 @@ export default function AdminLayout() {
         </Toolbar>
       </AppBar>
 
-      {/* Sidebar Drawer */}
-      <Drawer
-        variant="permanent"
-        sx={{
-          width: drawerWidth,
-          flexShrink: 0,
-          '& .MuiDrawer-paper': {
-            width: drawerWidth,
-            boxSizing: 'border-box',
-            borderRight: 1,
-            borderColor: 'divider',
-            transition: (theme) =>
-              theme.transitions.create('width', {
-                easing: theme.transitions.easing.sharp,
-                duration: theme.transitions.duration.enteringScreen,
-              }),
-            overflowX: 'hidden',
-            overflowY: 'auto',
-            '&::-webkit-scrollbar': {
-              width: 0,
-              display: 'none',
+      {/* Sidebar Drawer - Only shown for users with settings access */}
+      {hasSettingsAccess && (
+        <Drawer
+          variant="permanent"
+          sx={{
+            width: drawerOpen ? DRAWER_WIDTH : 0,
+            flexShrink: 0,
+            '& .MuiDrawer-paper': {
+              width: drawerOpen ? DRAWER_WIDTH : 0,
+              boxSizing: 'border-box',
+              borderRight: drawerOpen ? 1 : 0,
+              borderColor: 'divider',
+              transition: (theme) =>
+                theme.transitions.create('width', {
+                  easing: theme.transitions.easing.sharp,
+                  duration: theme.transitions.duration.enteringScreen,
+                }),
+              overflowX: 'hidden',
+              overflowY: 'auto',
+              '&::-webkit-scrollbar': {
+                width: 0,
+                display: 'none',
+              },
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
             },
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-          },
-        }}
-      >
-        <Toolbar /> {/* Spacer for AppBar */}
+          }}
+        >
+          <Toolbar /> {/* Spacer for AppBar */}
 
-        <Box sx={{ overflow: 'auto', mt: 1 }}>
-          <List>
-            {navItems.map((item) => {
-              // Skip Settings if user doesn't have access
-              if (item.roles && !item.roles.includes(user?.role || '')) {
-                return null;
-              }
-
-              // Handle items with children (Settings submenu)
-              if (item.children) {
-                return (
-                  <ListItem key={item.path} disablePadding sx={{ display: 'block' }}>
+          <Box sx={{ overflow: 'auto', mt: 1, display: drawerOpen ? 'block' : 'none' }}>
+            <Typography
+              variant="overline"
+              sx={{ px: 3, py: 1, display: 'block', color: 'text.secondary' }}
+            >
+              Settings
+            </Typography>
+            <List>
+              {sidebarItems[0]?.children
+                ?.filter((child) => !child.roles || child.roles.includes(user?.role || ''))
+                .map((child) => (
+                  <ListItem key={child.path} disablePadding>
                     <ListItemButton
-                      onClick={handleSettingsClick}
-                      selected={isActive(item.path)}
+                      onClick={() => navigate(child.path)}
+                      selected={location.pathname === child.path}
                       sx={{
-                        minHeight: 48,
-                        justifyContent: drawerOpen ? 'initial' : 'center',
-                        px: 2.5,
+                        minHeight: 44,
+                        px: 3,
                         mx: 1,
                         borderRadius: 1,
                         '&.Mui-selected': {
@@ -253,104 +275,20 @@ export default function AdminLayout() {
                         },
                       }}
                     >
-                      <ListItemIcon
-                        sx={{
-                          minWidth: 0,
-                          mr: drawerOpen ? 2 : 'auto',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        {item.icon}
+                      <ListItemIcon sx={{ minWidth: 0, mr: 2 }}>
+                        {child.icon}
                       </ListItemIcon>
                       <ListItemText
-                        primary={item.label}
-                        sx={{ opacity: drawerOpen ? 1 : 0 }}
+                        primary={child.label}
+                        primaryTypographyProps={{ fontSize: '0.875rem' }}
                       />
-                      {drawerOpen && (
-                        settingsOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />
-                      )}
                     </ListItemButton>
-                    <Collapse in={settingsOpen && drawerOpen} timeout="auto" unmountOnExit>
-                      <List component="div" disablePadding>
-                        {item.children
-                          .filter((child) => !child.roles || child.roles.includes(user?.role || ''))
-                          .map((child) => (
-                          <ListItemButton
-                            key={child.path}
-                            onClick={() => navigate(child.path)}
-                            selected={location.pathname === child.path}
-                            sx={{
-                              minHeight: 40,
-                              pl: 4,
-                              mx: 1,
-                              borderRadius: 1,
-                              '&.Mui-selected': {
-                                bgcolor: 'action.selected',
-                                '&:hover': {
-                                  bgcolor: 'action.hover',
-                                },
-                              },
-                            }}
-                          >
-                            <ListItemIcon sx={{ minWidth: 0, mr: 2 }}>
-                              {child.icon}
-                            </ListItemIcon>
-                            <ListItemText
-                              primary={child.label}
-                              primaryTypographyProps={{ fontSize: '0.875rem' }}
-                            />
-                          </ListItemButton>
-                        ))}
-                      </List>
-                    </Collapse>
                   </ListItem>
-                );
-              }
-
-              // Regular nav items
-              return (
-                <ListItem key={item.path} disablePadding sx={{ display: 'block' }}>
-                  <ListItemButton
-                    onClick={() => navigate(item.path)}
-                    selected={isActive(item.path)}
-                    sx={{
-                      minHeight: 48,
-                      justifyContent: drawerOpen ? 'initial' : 'center',
-                      px: 2.5,
-                      mx: 1,
-                      borderRadius: 1,
-                      '&.Mui-selected': {
-                        bgcolor: 'primary.main',
-                        color: 'primary.contrastText',
-                        '&:hover': {
-                          bgcolor: 'primary.dark',
-                        },
-                        '& .MuiListItemIcon-root': {
-                          color: 'inherit',
-                        },
-                      },
-                    }}
-                  >
-                    <ListItemIcon
-                      sx={{
-                        minWidth: 0,
-                        mr: drawerOpen ? 2 : 'auto',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      {item.icon}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={item.label}
-                      sx={{ opacity: drawerOpen ? 1 : 0 }}
-                    />
-                  </ListItemButton>
-                </ListItem>
-              );
-            })}
-          </List>
-        </Box>
-      </Drawer>
+                ))}
+            </List>
+          </Box>
+        </Drawer>
+      )}
 
       {/* Main Content */}
       <Box
