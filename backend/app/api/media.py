@@ -5,6 +5,7 @@ S3 pre-signed URLs for file upload, storage metadata
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import and_
 from typing import List, Optional
 from uuid import UUID
@@ -20,7 +21,8 @@ from ..models import Project, MediaAsset, User, AuditLog
 from ..schemas import (
     MediaUploadUrlRequest,
     MediaUploadUrlResponse,
-    MediaAssetResponse
+    MediaAssetResponse,
+    GeotaggedMediaResponse
 )
 from ..api.auth import get_current_user, require_role
 
@@ -154,6 +156,79 @@ async def request_upload_url(
     )
 
 
+@router.get("/geotagged", response_model=List[GeotaggedMediaResponse])
+async def get_geotagged_media(
+    project_id: Optional[UUID] = Query(None, description="Filter by project ID"),
+    limit: int = Query(default=100, le=500),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all geotagged photos for display on map.
+
+    Returns photos that have GPS coordinates (latitude/longitude).
+    Applies RBAC filtering based on user role.
+    """
+    # Base query for confirmed photos with GPS coordinates
+    query = db.query(MediaAsset).filter(
+        and_(
+            MediaAsset.media_type == 'photo',
+            MediaAsset.latitude.isnot(None),
+            MediaAsset.longitude.isnot(None),
+            MediaAsset.attributes['status'].astext == 'confirmed'
+        )
+    )
+
+    # Filter by project if specified
+    if project_id:
+        query = query.filter(MediaAsset.project_id == project_id)
+
+    # RBAC filtering
+    if current_user.role == "deo_user":
+        # DEO users can only see photos from their DEO's projects
+        deo_project_ids = db.query(Project.project_id).filter(
+            Project.deo_id == current_user.deo_id
+        ).subquery()
+        query = query.filter(MediaAsset.project_id.in_(deo_project_ids))
+
+    media_assets = query.order_by(MediaAsset.uploaded_at.desc()).limit(limit).all()
+
+    # Build response with project titles and thumbnail URLs
+    results = []
+    for media in media_assets:
+        # Get project title
+        project = db.query(Project).filter(Project.project_id == media.project_id).first()
+        project_title = project.project_title if project else "Unknown Project"
+
+        # Get filename from attributes
+        filename = media.attributes.get('filename') if media.attributes else None
+
+        # Generate thumbnail URL (same as download URL for now)
+        try:
+            thumbnail_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': settings.S3_BUCKET,
+                    'Key': media.storage_key
+                },
+                ExpiresIn=3600
+            )
+        except ClientError:
+            thumbnail_url = None
+
+        results.append(GeotaggedMediaResponse(
+            media_id=media.media_id,
+            project_id=media.project_id,
+            project_title=project_title,
+            latitude=media.latitude,
+            longitude=media.longitude,
+            thumbnail_url=thumbnail_url,
+            filename=filename
+        ))
+
+    return results
+
+
 @router.post("/{media_id}/confirm", response_model=MediaAssetResponse)
 async def confirm_upload(
     media_id: UUID,
@@ -192,6 +267,8 @@ async def confirm_upload(
         media.file_size = s3_response.get('ContentLength')
         media.attributes['status'] = 'confirmed'
         media.attributes['confirmed_at'] = datetime.utcnow().isoformat()
+        # Flag JSONB column as modified so SQLAlchemy detects the change
+        flag_modified(media, 'attributes')
 
     except ClientError as e:
         if e.response['Error']['Code'] == '404':

@@ -10,6 +10,7 @@ import type {
   MediaType,
   MediaUploadRequest,
   MediaUploadResponse,
+  GeotaggedMedia,
 } from '../types/media'
 
 /**
@@ -88,6 +89,21 @@ export async function fetchMediaAsset(mediaId: string): Promise<MediaAsset> {
  */
 export async function deleteMedia(mediaId: string): Promise<void> {
   await apiClient.delete(`/media/${mediaId}`)
+}
+
+/**
+ * Fetch geotagged photos for map display
+ */
+export async function fetchGeotaggedMedia(
+  projectId?: string,
+  limit = 100
+): Promise<GeotaggedMedia[]> {
+  const params: Record<string, unknown> = { limit }
+  if (projectId) {
+    params.project_id = projectId
+  }
+  const { data } = await apiClient.get<GeotaggedMedia[]>('/media/geotagged', { params })
+  return data
 }
 
 /**

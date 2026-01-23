@@ -27,6 +27,7 @@ import {
   getMediaTypeFromMime,
 } from '../../api/media'
 import type { MediaType } from '../../types/media'
+import { extractGpsFromImage, isImageWithPossibleExif } from '../../utils/exif'
 
 interface MediaUploadProps {
   projectId: string
@@ -76,12 +77,26 @@ export default function MediaUpload({
       )
 
       try {
+        // Extract GPS coordinates from EXIF data for photos
+        let latitude: number | undefined
+        let longitude: number | undefined
+
+        if (mediaType === 'photo' && isImageWithPossibleExif(file)) {
+          const gps = await extractGpsFromImage(file)
+          if (gps) {
+            latitude = gps.latitude
+            longitude = gps.longitude
+          }
+        }
+
         // Request upload URL from backend
         const uploadResponse = await requestUploadUrl({
           project_id: projectId,
           media_type: mediaType,
           filename: file.name,
           content_type: file.type,
+          latitude,
+          longitude,
         })
 
         // Upload to S3

@@ -16,10 +16,13 @@ import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Collapse from '@mui/material/Collapse';
-import { Search, Filter, X, RefreshCw } from 'lucide-react';
+import { Search, Filter, X, RefreshCw, Camera } from 'lucide-react';
 import { LeafletMap } from '../../components/map/LeafletMap';
+import { PhotoMarkers } from '../../components/map/PhotoMarkers';
 import { LoadingSpinner, FilterButton } from '../../components/mui';
 import { apiClient } from '../../api/client';
+import { fetchGeotaggedMedia } from '../../api/media';
+import Tooltip from '@mui/material/Tooltip';
 
 interface DEO {
   deo_id: number;
@@ -75,6 +78,7 @@ export default function AdminMap() {
   // Floating control state
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLButtonElement | null>(null);
+  const [showPhotos, setShowPhotos] = useState(false);
 
   // Fetch filter options
   const { data: filterOptions } = useQuery({
@@ -93,6 +97,14 @@ export default function AdminMap() {
       const response = await apiClient.get('/public/projects?limit=200');
       return response.data;
     },
+  });
+
+  // Fetch geotagged photos when toggle is enabled
+  const { data: geotaggedPhotos = [], refetch: refetchPhotos } = useQuery({
+    queryKey: ['geotaggedMedia'],
+    queryFn: () => fetchGeotaggedMedia(undefined, 200),
+    enabled: showPhotos,
+    staleTime: 60 * 1000, // 1 minute
   });
 
   // Apply client-side filtering
@@ -162,7 +174,10 @@ export default function AdminMap() {
 
   const handleRefresh = useCallback(() => {
     refetchProjects();
-  }, [refetchProjects]);
+    if (showPhotos) {
+      refetchPhotos();
+    }
+  }, [refetchProjects, refetchPhotos, showPhotos]);
 
   // Calculate active filters count
   const activeFiltersCount =
@@ -292,6 +307,22 @@ export default function AdminMap() {
             </IconButton>
           </Badge>
 
+          {/* Photo Toggle Button */}
+          <Tooltip title={showPhotos ? 'Hide geotagged photos' : 'Show geotagged photos'}>
+            <IconButton
+              onClick={() => setShowPhotos(!showPhotos)}
+              sx={{
+                bgcolor: showPhotos ? 'primary.main' : 'transparent',
+                color: showPhotos ? 'white' : 'inherit',
+                '&:hover': {
+                  bgcolor: showPhotos ? 'primary.dark' : 'action.hover',
+                },
+              }}
+            >
+              <Camera size={20} />
+            </IconButton>
+          </Tooltip>
+
           {/* Refresh Button */}
           <IconButton onClick={handleRefresh}>
             <RefreshCw size={20} />
@@ -311,6 +342,7 @@ export default function AdminMap() {
         >
           <Typography variant="caption">
             {projectsWithGeometry.length} of {filteredProjects.length} projects on map
+            {showPhotos && geotaggedPhotos.length > 0 && ` | ${geotaggedPhotos.length} photos`}
           </Typography>
         </Box>
 
@@ -452,7 +484,11 @@ export default function AdminMap() {
         onProjectSelect={handleProjectSelect}
         height="100%"
         showThemeToggle={false}
-      />
+      >
+        {showPhotos && geotaggedPhotos.length > 0 && (
+          <PhotoMarkers photos={geotaggedPhotos} />
+        )}
+      </LeafletMap>
     </Box>
   );
 }

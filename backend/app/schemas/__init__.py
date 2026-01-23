@@ -365,6 +365,20 @@ class MediaAssetResponse(BaseModel):
         from_attributes = True
 
 
+class GeotaggedMediaResponse(BaseModel):
+    """Geotagged media response for map markers"""
+    media_id: UUID
+    project_id: UUID
+    project_title: str
+    latitude: float
+    longitude: float
+    thumbnail_url: Optional[str] = None
+    filename: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 # =============================================================================
 # PUBLIC API
 # =============================================================================

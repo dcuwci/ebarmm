@@ -35,3 +35,13 @@ export interface MediaUploadResponse {
   media_id: string
   expires_in: number
 }
+
+export interface GeotaggedMedia {
+  media_id: string
+  project_id: string
+  project_title: string
+  latitude: number
+  longitude: number
+  thumbnail_url?: string | null
+  filename?: string | null
+}
