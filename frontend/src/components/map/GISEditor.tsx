@@ -319,34 +319,20 @@ export default function GISEditor({ projectId }: GISEditorProps) {
 
       {/* Map Area */}
       <Box sx={{ flex: 1, position: 'relative' }}>
-        {editMode ? (
-          <LeafletGISEditor
-            initialWKT={currentWKT}
-            onSave={handleSave}
-            onCancel={handleCancel}
-            height="100%"
-            editable={true}
-            geotaggedPhotos={geotaggedPhotos}
-          />
-        ) : (
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              bgcolor: 'grey.100',
-            }}
-          >
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              Select a feature to edit or add a new one
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Use the sidebar to manage GIS features for this project
-            </Typography>
-          </Box>
-        )}
+        <LeafletGISEditor
+          initialWKT={currentWKT}
+          onSave={handleSave}
+          onCancel={handleCancel}
+          height="100%"
+          editable={editMode}
+          geotaggedPhotos={geotaggedPhotos}
+          existingFeatures={data?.items?.map((f) => ({
+            feature_id: f.feature_id,
+            geometry: f.geometry,
+            feature_type: f.feature_type,
+          })) || []}
+          selectedFeatureId={selectedFeatureId}
+        />
       </Box>
 
       {/* Snackbar for notifications */}

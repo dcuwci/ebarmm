@@ -49,6 +49,12 @@ interface WKTResult {
   area: number | null;
 }
 
+interface ExistingFeature {
+  feature_id: string;
+  geometry: GeoJSON.Geometry;
+  feature_type: string;
+}
+
 interface LeafletGISEditorProps {
   initialWKT?: string;
   onSave?: (result: WKTResult) => void;
@@ -56,6 +62,8 @@ interface LeafletGISEditorProps {
   height?: string | number;
   editable?: boolean;
   geotaggedPhotos?: GeotaggedMedia[];
+  existingFeatures?: ExistingFeature[];
+  selectedFeatureId?: string | null;
 }
 
 /**
@@ -68,6 +76,8 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
   height = '500px',
   editable = true,
   geotaggedPhotos = [],
+  existingFeatures = [],
+  selectedFeatureId = null,
 }) => {
   const { mode, toggleTheme } = useTheme();
 
@@ -83,6 +93,7 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
   const polylineRef = useRef<L.Polyline | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
   const photoMarkersRef = useRef<L.Marker[]>([]);
+  const existingFeaturesLayerRef = useRef<L.GeoJSON | null>(null);
   const coordinatesRef = useRef<Coordinate[]>(coordinates);
   const skipMarkerUpdateRef = useRef(false);
 
@@ -233,6 +244,94 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
       photoMarkersRef.current = [];
     };
   }, [geotaggedPhotos, mapReady]);
+
+  // Render existing features as background layer
+  useEffect(() => {
+    if (!mapInstanceRef.current || !mapReady) return;
+
+    // Remove existing layer
+    if (existingFeaturesLayerRef.current) {
+      mapInstanceRef.current.removeLayer(existingFeaturesLayerRef.current);
+      existingFeaturesLayerRef.current = null;
+    }
+
+    // Filter out the currently selected feature (being edited)
+    const featuresToShow = existingFeatures.filter(
+      (f) => f.feature_id !== selectedFeatureId
+    );
+
+    if (featuresToShow.length === 0) return;
+
+    // Create GeoJSON feature collection
+    const featureCollection: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: featuresToShow.map((f) => ({
+        type: 'Feature' as const,
+        properties: { feature_type: f.feature_type, feature_id: f.feature_id },
+        geometry: f.geometry,
+      })),
+    };
+
+    // Feature type colors
+    const featureColors: Record<string, string> = {
+      road: '#3B82F6',
+      bridge: '#8B5CF6',
+      drainage: '#06B6D4',
+      facility: '#F59E0B',
+      building: '#EF4444',
+      other: '#6B7280',
+    };
+
+    // Add GeoJSON layer
+    existingFeaturesLayerRef.current = L.geoJSON(featureCollection, {
+      style: (feature) => {
+        const featureType = feature?.properties?.feature_type || 'other';
+        const color = featureColors[featureType] || '#6B7280';
+        return {
+          color,
+          weight: 3,
+          opacity: 0.6,
+          fillColor: color,
+          fillOpacity: 0.2,
+          dashArray: '5, 5',
+        };
+      },
+      pointToLayer: (feature, latlng) => {
+        const featureType = feature?.properties?.feature_type || 'other';
+        const color = featureColors[featureType] || '#6B7280';
+        return L.circleMarker(latlng, {
+          radius: 6,
+          fillColor: color,
+          color: '#fff',
+          weight: 2,
+          opacity: 0.8,
+          fillOpacity: 0.6,
+        });
+      },
+      onEachFeature: (feature, layer) => {
+        const featureType = feature?.properties?.feature_type || 'other';
+        layer.bindTooltip(`Existing: ${featureType}`, {
+          permanent: false,
+          direction: 'top',
+        });
+      },
+    }).addTo(mapInstanceRef.current);
+
+    // Fit bounds to show all features if no initial geometry
+    if (!initialWKT && featuresToShow.length > 0) {
+      const bounds = existingFeaturesLayerRef.current.getBounds();
+      if (bounds.isValid()) {
+        mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
+      }
+    }
+
+    return () => {
+      if (existingFeaturesLayerRef.current && mapInstanceRef.current) {
+        mapInstanceRef.current.removeLayer(existingFeaturesLayerRef.current);
+        existingFeaturesLayerRef.current = null;
+      }
+    };
+  }, [existingFeatures, selectedFeatureId, mapReady, initialWKT]);
 
   // Load initial geometry
   // Note: parseWKTGeometry returns coordinates in [lat, lng] order (Leaflet format)
