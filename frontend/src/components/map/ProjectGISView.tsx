@@ -20,6 +20,8 @@ import {
   Edit3,
 } from 'lucide-react'
 import { fetchGISFeaturesGeoJSON, FEATURE_TYPE_LABELS, FEATURE_TYPE_COLORS } from '../../api/gis'
+import { fetchGeotaggedMedia } from '../../api/media'
+import { PhotoMarkers } from './PhotoMarkers'
 import type { FeatureType } from '../../types/gis'
 import 'leaflet/dist/leaflet.css'
 
@@ -50,6 +52,13 @@ export default function ProjectGISView({ projectId }: ProjectGISViewProps) {
   const { data: features, isLoading, error } = useQuery({
     queryKey: ['gis-features', projectId],
     queryFn: () => fetchGISFeaturesGeoJSON(projectId),
+  })
+
+  // Fetch geotagged photos for this project
+  const { data: geotaggedPhotos = [] } = useQuery({
+    queryKey: ['geotaggedMedia', projectId],
+    queryFn: () => fetchGeotaggedMedia(projectId),
+    staleTime: 60 * 1000,
   })
 
   // Calculate feature counts by type
@@ -177,39 +186,36 @@ export default function ProjectGISView({ projectId }: ProjectGISViewProps) {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Feature Summary */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Layers size={18} />
-            <Typography variant="subtitle2" fontWeight={600}>
-              {features.features.length} Features
-            </Typography>
-          </Box>
-          {Object.entries(featureCounts).map(([type, count]) => (
-            <Chip
-              key={type}
-              label={`${FEATURE_TYPE_LABELS[type as FeatureType] || type}: ${count}`}
-              size="small"
-              sx={{
-                bgcolor: `${FEATURE_TYPE_COLORS[type as FeatureType]}20`,
-                color: FEATURE_TYPE_COLORS[type as FeatureType],
-                fontWeight: 500,
-              }}
-            />
-          ))}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Layers size={18} />
+          <Typography variant="subtitle2" fontWeight={600}>
+            {features.features.length} Features
+          </Typography>
         </Box>
-        <Link
-          to={`/admin/projects/${projectId}/gis`}
-          style={{ textDecoration: 'none' }}
-        >
+        {Object.entries(featureCounts).map(([type, count]) => (
           <Chip
-            icon={<Edit3 size={14} />}
-            label="Edit Features"
-            clickable
-            color="primary"
-            variant="outlined"
+            key={type}
+            label={`${FEATURE_TYPE_LABELS[type as FeatureType] || type}: ${count}`}
+            size="small"
+            sx={{
+              bgcolor: `${FEATURE_TYPE_COLORS[type as FeatureType]}20`,
+              color: FEATURE_TYPE_COLORS[type as FeatureType],
+              fontWeight: 500,
+            }}
           />
-        </Link>
+        ))}
+        {geotaggedPhotos.length > 0 && (
+          <Chip
+            label={`${geotaggedPhotos.length} Photos`}
+            size="small"
+            sx={{
+              bgcolor: '#05966920',
+              color: '#059669',
+              fontWeight: 500,
+            }}
+          />
+        )}
       </Box>
 
       {/* Map */}
@@ -230,6 +236,9 @@ export default function ProjectGISView({ projectId }: ProjectGISViewProps) {
               pointToLayer={pointToLayer}
               onEachFeature={onEachFeature}
             />
+            {geotaggedPhotos.length > 0 && (
+              <PhotoMarkers photos={geotaggedPhotos} />
+            )}
             <FitBounds features={features} />
           </MapContainer>
         </Box>
