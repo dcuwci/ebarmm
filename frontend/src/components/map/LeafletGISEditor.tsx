@@ -18,6 +18,7 @@ import {
   parseWKTGeometry,
   formatLength,
 } from '../../utils/geometry';
+import type { GeotaggedMedia } from '../../types/media';
 
 // Tile layer URLs
 const TILE_LAYERS = {
@@ -54,6 +55,7 @@ interface LeafletGISEditorProps {
   onCancel?: () => void;
   height?: string | number;
   editable?: boolean;
+  geotaggedPhotos?: GeotaggedMedia[];
 }
 
 /**
@@ -65,6 +67,7 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
   onCancel,
   height = '500px',
   editable = true,
+  geotaggedPhotos = [],
 }) => {
   const { mode, toggleTheme } = useTheme();
 
@@ -79,6 +82,7 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const polylineRef = useRef<L.Polyline | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
+  const photoMarkersRef = useRef<L.Marker[]>([]);
   const coordinatesRef = useRef<Coordinate[]>(coordinates);
   const skipMarkerUpdateRef = useRef(false);
 
@@ -134,6 +138,101 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
     const attribution = mode === 'dark' ? TILE_LAYERS.dark.attribution : TILE_LAYERS.light.attribution;
     tileLayerRef.current = L.tileLayer(tileUrl, { attribution }).addTo(mapInstanceRef.current);
   }, [mode]);
+
+  // Render geotagged photo markers as reference guides
+  useEffect(() => {
+    if (!mapInstanceRef.current || !mapReady) return;
+
+    // Clear existing photo markers
+    photoMarkersRef.current.forEach((marker) => {
+      mapInstanceRef.current?.removeLayer(marker);
+    });
+    photoMarkersRef.current = [];
+
+    // Add markers for each geotagged photo
+    geotaggedPhotos.forEach((photo) => {
+      const cameraIcon = L.divIcon({
+        html: `
+          <div style="
+            width: 28px;
+            height: 28px;
+            background-color: #059669;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+              <circle cx="12" cy="13" r="3"/>
+            </svg>
+          </div>
+        `,
+        className: 'photo-marker-icon',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        popupAnchor: [0, -14],
+        tooltipAnchor: [14, 0],
+      });
+
+      const marker = L.marker([photo.latitude, photo.longitude], { icon: cameraIcon });
+
+      // Tooltip with image preview
+      const tooltipContent = `
+        <div class="photo-preview-tooltip">
+          ${photo.thumbnail_url
+            ? `<img src="${photo.thumbnail_url}" alt="${photo.filename || 'Photo'}" />`
+            : '<div class="no-preview">No preview</div>'
+          }
+          <div class="photo-info">
+            <strong>${photo.project_title}</strong>
+            ${photo.filename ? `<span>${photo.filename}</span>` : ''}
+          </div>
+        </div>
+      `;
+
+      marker.bindTooltip(tooltipContent, {
+        direction: 'right',
+        offset: [10, 0],
+        opacity: 1,
+        className: 'photo-tooltip-container',
+      });
+
+      // Popup with larger image
+      const popupContent = `
+        <div class="photo-popup">
+          ${photo.thumbnail_url
+            ? `<a href="${photo.thumbnail_url}" target="_blank" rel="noopener noreferrer">
+                 <img src="${photo.thumbnail_url}" alt="${photo.filename || 'Photo'}" />
+               </a>`
+            : '<div class="no-preview">No preview available</div>'
+          }
+          <div class="photo-popup-info">
+            <strong>${photo.project_title}</strong>
+            ${photo.filename ? `<div>${photo.filename}</div>` : ''}
+          </div>
+        </div>
+      `;
+
+      marker.bindPopup(popupContent, {
+        maxWidth: 400,
+        className: 'photo-popup-container',
+      });
+
+      marker.addTo(mapInstanceRef.current!);
+      photoMarkersRef.current.push(marker);
+    });
+
+    // Cleanup
+    return () => {
+      photoMarkersRef.current.forEach((marker) => {
+        mapInstanceRef.current?.removeLayer(marker);
+      });
+      photoMarkersRef.current = [];
+    };
+  }, [geotaggedPhotos, mapReady]);
 
   // Load initial geometry
   // Note: parseWKTGeometry returns coordinates in [lat, lng] order (Leaflet format)

@@ -27,6 +27,7 @@ import {
   updateGISFeature,
   deleteGISFeature,
 } from '../../api/gis';
+import { fetchGeotaggedMedia } from '../../api/media';
 import { geojsonToWKT, wktToGeoJSON, getGeometryType } from '../../utils/geometry';
 import type { FeatureType } from '../../types/gis';
 import { geometryTypeToFeatureType } from '../../types/gis';
@@ -59,6 +60,13 @@ export default function GISEditor({ projectId }: GISEditorProps) {
     queryFn: () => fetchGISFeatures(projectId),
     refetchOnMount: 'always',
     staleTime: 0,
+  });
+
+  // Fetch geotagged photos for this project as reference guides
+  const { data: geotaggedPhotos = [] } = useQuery({
+    queryKey: ['geotaggedMedia', projectId],
+    queryFn: () => fetchGeotaggedMedia(projectId),
+    staleTime: 60 * 1000, // 1 minute
   });
 
   // Create feature mutation
@@ -318,6 +326,7 @@ export default function GISEditor({ projectId }: GISEditorProps) {
             onCancel={handleCancel}
             height="100%"
             editable={true}
+            geotaggedPhotos={geotaggedPhotos}
           />
         ) : (
           <Box
