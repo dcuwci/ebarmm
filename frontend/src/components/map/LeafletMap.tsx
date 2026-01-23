@@ -136,6 +136,51 @@ const ProjectFeatures: React.FC<{
 
     const layers: L.Layer[] = [];
 
+    // Helper function to create layer from parsed geometry
+    const createLayerFromGeometry = (
+      geometry: ReturnType<typeof parseWKTGeometry>,
+      color: string,
+      isSelected: boolean
+    ): L.Layer | null => {
+      if (!geometry) return null;
+
+      if (geometry.type === 'Point') {
+        const coords = geometry.coordinates as number[];
+        return L.marker([coords[0], coords[1]]);
+      } else if (geometry.type === 'LineString') {
+        const coords = geometry.coordinates as number[][];
+        return L.polyline(coords as L.LatLngExpression[], {
+          color,
+          weight: isSelected ? 5 : 3,
+          opacity: isSelected ? 1 : 0.7,
+        });
+      } else if (geometry.type === 'MultiLineString') {
+        const coords = geometry.coordinates as number[][][];
+        return L.polyline(coords as L.LatLngExpression[][], {
+          color,
+          weight: isSelected ? 5 : 3,
+          opacity: isSelected ? 1 : 0.7,
+        });
+      } else if (geometry.type === 'Polygon') {
+        const coords = geometry.coordinates as number[][];
+        return L.polygon(coords as L.LatLngExpression[], {
+          color,
+          fillColor: color,
+          fillOpacity: 0.3,
+          weight: isSelected ? 3 : 2,
+        });
+      } else if (geometry.type === 'MultiPolygon') {
+        const coords = geometry.coordinates as number[][][];
+        return L.polygon(coords as L.LatLngExpression[][], {
+          color,
+          fillColor: color,
+          fillOpacity: 0.3,
+          weight: isSelected ? 3 : 2,
+        });
+      }
+      return null;
+    };
+
     projects.forEach((project) => {
       if (!project.geometry_wkt) return;
 
@@ -145,58 +190,37 @@ const ProjectFeatures: React.FC<{
       const color = getStatusColor(project.status);
       const isSelected = project.project_id === selectedProjectId;
 
-      let layer: L.Layer | null = null;
+      const projectLayers: L.Layer[] = [];
 
-      if (geometry.type === 'Point') {
-        const coords = geometry.coordinates as number[];
-        layer = L.marker([coords[0], coords[1]]);
-      } else if (geometry.type === 'LineString') {
-        const coords = geometry.coordinates as number[][];
-        layer = L.polyline(coords as L.LatLngExpression[], {
-          color,
-          weight: isSelected ? 5 : 3,
-          opacity: isSelected ? 1 : 0.7,
+      // Handle GeometryCollection (multiple features per project)
+      if (geometry.type === 'GeometryCollection' && geometry.geometries) {
+        geometry.geometries.forEach((g) => {
+          const layer = createLayerFromGeometry(g, color, isSelected);
+          if (layer) {
+            projectLayers.push(layer);
+          }
         });
-      } else if (geometry.type === 'MultiLineString') {
-        const coords = geometry.coordinates as number[][][];
-        layer = L.polyline(coords as L.LatLngExpression[][], {
-          color,
-          weight: isSelected ? 5 : 3,
-          opacity: isSelected ? 1 : 0.7,
-        });
-      } else if (geometry.type === 'Polygon') {
-        const coords = geometry.coordinates as number[][];
-        layer = L.polygon(coords as L.LatLngExpression[], {
-          color,
-          fillColor: color,
-          fillOpacity: 0.3,
-          weight: isSelected ? 3 : 2,
-        });
-      } else if (geometry.type === 'MultiPolygon') {
-        const coords = geometry.coordinates as number[][][];
-        layer = L.polygon(coords as L.LatLngExpression[][], {
-          color,
-          fillColor: color,
-          fillOpacity: 0.3,
-          weight: isSelected ? 3 : 2,
-        });
+      } else {
+        const layer = createLayerFromGeometry(geometry, color, isSelected);
+        if (layer) {
+          projectLayers.push(layer);
+        }
       }
 
-      if (layer) {
-        // Add popup
+      // Add popup and click handler to all layers for this project
+      projectLayers.forEach((layer) => {
         layer.bindPopup(`
           <strong>${project.project_title}</strong><br/>
           Status: ${project.status}
         `);
 
-        // Add click handler
         if (onProjectSelect) {
           layer.on('click', () => onProjectSelect(project));
         }
 
         layer.addTo(map);
         layers.push(layer);
-      }
+      });
     });
 
     // Cleanup on unmount or when projects change

@@ -96,6 +96,7 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
   const existingFeaturesLayerRef = useRef<L.GeoJSON | null>(null);
   const coordinatesRef = useRef<Coordinate[]>(coordinates);
   const skipMarkerUpdateRef = useRef(false);
+  const hasInitialFitRef = useRef(false);
 
   // Sync coordinates ref
   useEffect(() => {
@@ -333,6 +334,11 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
     };
   }, [existingFeatures, selectedFeatureId, mapReady, initialWKT]);
 
+  // Reset initial fit flag when initialWKT changes
+  useEffect(() => {
+    hasInitialFitRef.current = false;
+  }, [initialWKT]);
+
   // Load initial geometry
   // Note: parseWKTGeometry returns coordinates in [lat, lng] order (Leaflet format)
   useEffect(() => {
@@ -356,6 +362,16 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
     }
 
     setCoordinates(coords);
+
+    // One-time fit to the feature being edited
+    if (!hasInitialFitRef.current && coords.length > 0) {
+      hasInitialFitRef.current = true;
+      const latlngs = coords.map((c) => L.latLng(c.lat, c.lng));
+      const bounds = L.latLngBounds(latlngs);
+      if (bounds.isValid()) {
+        mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
+      }
+    }
   }, [initialWKT, mapReady]);
 
   // Handle map click for drawing
@@ -461,8 +477,6 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
           setCoordinates(newCoords);
         }
       });
-
-      mapInstanceRef.current.fitBounds(polylineRef.current.getBounds(), { padding: [50, 50] });
     }
 
     // Create draggable markers for each vertex

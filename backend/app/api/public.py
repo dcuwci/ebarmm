@@ -82,12 +82,15 @@ async def get_public_projects(
 
         current_progress = float(latest_log.reported_percent) if latest_log else 0.0
 
-        # Get primary GIS feature geometry as WKT
+        # Get all GIS feature geometries combined as WKT
         geometry_wkt = None
         try:
-            wkt_result = db.query(func.ST_AsText(GISFeature.geometry)).filter(
+            # Use ST_Collect to combine all geometries for this project
+            wkt_result = db.query(
+                func.ST_AsText(func.ST_Collect(GISFeature.geometry))
+            ).filter(
                 GISFeature.project_id == project.project_id
-            ).limit(1).scalar()
+            ).scalar()
             if wkt_result:
                 geometry_wkt = wkt_result
         except Exception:

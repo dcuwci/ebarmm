@@ -79,7 +79,7 @@ The implementation deviated from the original technology plan in several areas. 
 |-------------|--------|----------------------|
 | Single interactive map showing all data | ✅ Complete | Leaflet map with multiple layers |
 | Road inventory dataset display | ✅ Complete | GIS features stored in PostGIS |
-| Geotagged photos on map | ✅ Complete | Media assets linked to coordinates |
+| Geotagged photos on map | ✅ Complete | EXIF GPS extraction, photo markers with tooltips/popups |
 | Project locations and boundaries | ✅ Complete | Project boundary polygons supported |
 | RouteShoot tracks | ⚠️ Partial | GPS track storage ready, RouteShoot integration pending mobile app |
 | Drone video coverage areas | ⚠️ Partial | Video storage ready, coverage mapping pending |
@@ -95,9 +95,16 @@ The implementation deviated from the original technology plan in several areas. 
 ```
 Database: PostGIS geometry columns with GIST indexes
 API: /api/v1/gis/features (CRUD), /api/v1/public/gis/features (read-only)
-Frontend: LeafletGISEditor.tsx, ProjectGISView.tsx
-Supported Geometry Types: Point, LineString, Polygon
+API: /api/v1/media/geotagged (photo markers with GPS coordinates)
+Frontend: LeafletGISEditor.tsx, ProjectGISView.tsx, PhotoMarkers.tsx
+Supported Geometry Types: Point, LineString, Polygon, GeometryCollection
 Feature Types: road, bridge, drainage, facility, building, other
+
+Photo Geotagging:
+- Automatic EXIF GPS extraction on upload (exifr library)
+- Camera icon markers on map with hover tooltips and click popups
+- Photo markers shown in AdminMap, GIS Editor, and Project GIS view
+- Multiple GIS features per project displayed via ST_Collect
 ```
 
 ---
@@ -133,6 +140,8 @@ Feature Types: road, bridge, drainage, facility, building, other
 - **Attribute Panel:** Dynamic form for feature properties
 - **Real-time Sync:** Auto-save to backend on geometry change
 - **Vector Tiles:** ST_AsMVT for efficient rendering
+- **Photo Reference:** Geotagged photos displayed as markers during editing
+- **Multi-Feature View:** All existing features shown as background layer while editing
 
 ---
 
@@ -196,7 +205,7 @@ class ProjectProgressLog(Base):
 | Flag suspicious locations | ✅ Complete | Validation logging |
 | Photo hash verification (SHA-256) | ✅ Complete | Hash stored on upload |
 | Verify hash on access | ✅ Complete | Hash verification endpoint |
-| EXIF metadata checking | ⚠️ Partial | GPS extraction works, full EXIF validation pending |
+| EXIF metadata checking | ✅ Complete | GPS extraction via exifr, coordinates saved with media |
 | QR code authentication | ❌ Not Started | Planned for report generation |
 | Visible watermark on PDFs | ❌ Not Started | Planned for report generation |
 | Invisible watermark (steganography) | ❌ Not Started | Lower priority |

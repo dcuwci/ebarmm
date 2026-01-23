@@ -9,11 +9,12 @@ import wellknown from 'wellknown';
 import L from 'leaflet';
 
 // Types
-export type GeometryType = 'Point' | 'LineString' | 'MultiLineString' | 'Polygon' | 'MultiPolygon';
+export type GeometryType = 'Point' | 'LineString' | 'MultiLineString' | 'Polygon' | 'MultiPolygon' | 'GeometryCollection';
 
 export interface ParsedGeometry {
   type: GeometryType;
   coordinates: number[] | number[][] | number[][][];
+  geometries?: ParsedGeometry[]; // For GeometryCollection
 }
 
 export interface LatLngCoordinate {
@@ -85,6 +86,30 @@ export const parseWKTGeometry = (wkt: string): ParsedGeometry | null => {
           })
           .filter((polygon) => polygon.length > 0),
       };
+    } else if (geojson.type === 'GeometryCollection') {
+      const geometries = (geojson as GeoJSON.GeometryCollection).geometries;
+      if (!geometries || geometries.length === 0) {
+        return null;
+      }
+      // Recursively parse each geometry in the collection
+      const parsedGeometries: ParsedGeometry[] = [];
+      for (const g of geometries) {
+        const wktStr = wellknown.stringify(g as wellknown.GeoJSONGeometry);
+        if (wktStr) {
+          const parsed = parseWKTGeometry(wktStr);
+          if (parsed) {
+            parsedGeometries.push(parsed);
+          }
+        }
+      }
+      if (parsedGeometries.length === 0) {
+        return null;
+      }
+      return {
+        type: 'GeometryCollection',
+        coordinates: [],
+        geometries: parsedGeometries,
+      };
     }
     return null;
   } catch (error) {
@@ -140,6 +165,18 @@ export const calculateBounds = (
     (geometryData.coordinates as number[][][]).forEach((polygon) =>
       processCoordsArray(polygon)
     );
+  } else if (geometryData.type === 'GeometryCollection' && geometryData.geometries) {
+    // Recursively calculate bounds for each geometry in the collection
+    geometryData.geometries.forEach((g) => {
+      const subBounds = calculateBounds(g);
+      if (subBounds) {
+        const [[sMinLat, sMinLng], [sMaxLat, sMaxLng]] = subBounds as [[number, number], [number, number]];
+        minLat = Math.min(minLat, sMinLat);
+        maxLat = Math.max(maxLat, sMaxLat);
+        minLng = Math.min(minLng, sMinLng);
+        maxLng = Math.max(maxLng, sMaxLng);
+      }
+    });
   } else {
     return null;
   }

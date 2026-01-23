@@ -231,6 +231,7 @@ export default function ProjectGISView({ projectId }: ProjectGISViewProps) {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <GeoJSON
+              key={features.features.map(f => f.id).join('-')}
               data={features}
               style={getFeatureStyle}
               pointToLayer={pointToLayer}
