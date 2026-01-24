@@ -48,10 +48,19 @@ class EBarmmApplication : Application(), Configuration.Provider, ImageLoaderFact
             .build()
 
     override fun newImageLoader(): ImageLoader {
-        return ImageLoader.Builder(this)
-            .okHttpClient(okHttpClient)
+        val builder = ImageLoader.Builder(this)
             .crossfade(true)
-            .build()
+
+        // Use injected OkHttpClient if available, otherwise use default
+        try {
+            if (::okHttpClient.isInitialized) {
+                builder.okHttpClient(okHttpClient)
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "OkHttpClient not yet initialized, using default")
+        }
+
+        return builder.build()
     }
 
     private fun schedulePeriodicSync() {
