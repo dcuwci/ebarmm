@@ -91,7 +91,7 @@ fun MapScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    var showPhotoMarkers by remember { mutableStateOf(true) }
+    var showPhotoMarkers by remember { mutableStateOf(false) }
     var selectedPhoto by remember { mutableStateOf<PhotoMarker?>(null) }
 
     // Configure osmdroid
@@ -159,11 +159,13 @@ fun MapScreen(
                 )
             } else {
                 val geometries = viewModel.getProjectGeometries()
-                val photoMarkers = uiState.photoMarkers
+                // Filter photo markers to only show photos from filtered projects
+                val filteredProjectIds = uiState.projects.map { it.projectId }.toSet()
+                val filteredPhotoMarkers = uiState.photoMarkers.filter { it.projectId in filteredProjectIds }
 
                 OsmMapView(
                     geometries = geometries,
-                    photoMarkers = if (showPhotoMarkers) photoMarkers else emptyList(),
+                    photoMarkers = if (showPhotoMarkers) filteredPhotoMarkers else emptyList(),
                     selectedProject = uiState.selectedProject,
                     onGeometryClick = { geometry ->
                         val project = uiState.projects.find { it.projectId == geometry.projectId }
