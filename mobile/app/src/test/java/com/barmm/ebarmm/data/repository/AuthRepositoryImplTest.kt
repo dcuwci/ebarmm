@@ -7,7 +7,7 @@ import com.barmm.ebarmm.data.remote.api.AuthApi
 import com.barmm.ebarmm.data.remote.dto.LoginRequest
 import com.barmm.ebarmm.data.remote.dto.RefreshRequest
 import com.barmm.ebarmm.data.remote.dto.TokenResponse
-import com.barmm.ebarmm.data.remote.dto.UserDto
+import com.barmm.ebarmm.data.remote.dto.UserResponse
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -31,13 +31,17 @@ class AuthRepositoryImplTest {
     private lateinit var userDao: UserDao
     private lateinit var repository: AuthRepositoryImpl
 
-    private val mockUserDto = UserDto(
+    private val mockUserResponse = UserResponse(
         userId = "user-123",
         username = "testuser",
         email = "test@example.com",
         role = "deo_user",
         deoId = 1,
+        region = null,
         isActive = true,
+        firstName = null,
+        lastName = null,
+        phoneNumber = null,
         mfaEnabled = false
     )
 
@@ -45,7 +49,8 @@ class AuthRepositoryImplTest {
         accessToken = "access-token-123",
         refreshToken = "refresh-token-456",
         tokenType = "Bearer",
-        user = mockUserDto
+        expiresIn = 3600,
+        user = mockUserResponse
     )
 
     @Before
@@ -124,15 +129,18 @@ class AuthRepositoryImplTest {
     @Test
     fun `getCurrentUser returns user from dao`() = runTest {
         val mockUser = UserEntity(
-            odId = 1,
-            odName = "Test DEO",
             userId = "user-123",
             username = "testuser",
             email = "test@example.com",
             role = "deo_user",
             deoId = 1,
+            region = null,
             isActive = true,
-            mfaEnabled = false
+            firstName = null,
+            lastName = null,
+            phoneNumber = null,
+            mfaEnabled = false,
+            syncedAt = System.currentTimeMillis()
         )
         coEvery { userDao.getCurrentUser() } returns mockUser
 

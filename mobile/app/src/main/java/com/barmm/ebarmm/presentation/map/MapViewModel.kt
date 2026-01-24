@@ -107,13 +107,17 @@ class MapViewModel @Inject constructor(
 
     private fun loadPhotoMarkers() {
         viewModelScope.launch {
+            timber.log.Timber.d("=== MapViewModel.loadPhotoMarkers() START ===")
             val photoMarkers = mutableListOf<PhotoMarker>()
 
             // First try to fetch from backend (photos uploaded via web)
             try {
+                timber.log.Timber.d("Calling mediaApi.getGeotaggedMedia(limit=100)...")
                 val response = mediaApi.getGeotaggedMedia(limit = 100)
                 if (response.isSuccessful && response.body() != null) {
-                    response.body()!!.forEach { media ->
+                    val mediaList = response.body()!!
+                    timber.log.Timber.d("Received ${mediaList.size} geotagged photos from backend")
+                    mediaList.forEach { media ->
                         photoMarkers.add(
                             PhotoMarker(
                                 mediaId = media.mediaId,
@@ -126,15 +130,19 @@ class MapViewModel @Inject constructor(
                             )
                         )
                     }
+                } else {
+                    timber.log.Timber.w("!!! API returned error: ${response.code()} - ${response.message()} (check if logged in)")
                 }
             } catch (e: Exception) {
-                // Backend fetch failed, continue with local photos
+                timber.log.Timber.e(e, "!!! Backend fetch FAILED for geotagged media: ${e.message}")
             }
 
             // Also include local photos not yet synced
             try {
+                timber.log.Timber.d("Fetching local geotagged photos...")
                 val allProjects = projectDao.getAllProjects().first()
                 val existingIds = photoMarkers.map { it.mediaId }.toSet()
+                var localCount = 0
 
                 for (project in allProjects) {
                     val projectMedia = mediaDao.getMediaByProject(project.projectId).first()
@@ -153,13 +161,17 @@ class MapViewModel @Inject constructor(
                                     filePath = media.filePath
                                 )
                             )
+                            localCount++
                         }
                 }
+                timber.log.Timber.d("Found $localCount local geotagged photos")
             } catch (e: Exception) {
-                // Local fetch failed, continue with what we have
+                timber.log.Timber.e(e, "!!! Local fetch FAILED for geotagged media: ${e.message}")
             }
 
+            timber.log.Timber.d("=== MapViewModel.loadPhotoMarkers() END - Total: ${photoMarkers.size} ===")
             _uiState.update { it.copy(photoMarkers = photoMarkers) }
+            timber.log.Timber.d("UI state updated with ${photoMarkers.size} photo markers")
         }
     }
 

@@ -1,6 +1,7 @@
 package com.barmm.ebarmm.presentation.routeshoot
 
 import android.content.Context
+import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
@@ -78,7 +79,7 @@ class RouteShootViewModel @Inject constructor(
     fun createVideoCapture(): VideoCapture<Recorder> {
         val qualitySelector = QualitySelector.from(
             Quality.HD,
-            QualitySelector.getFallbackStrategy(Quality.SD)
+            FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
         )
 
         val recorder = Recorder.Builder()
@@ -225,7 +226,7 @@ class RouteShootViewModel @Inject constructor(
                 )
 
                 // Save to database
-                mediaDao.insert(mediaEntity)
+                mediaDao.insertMedia(mediaEntity)
                 gpsTrackDao.insertTrack(gpsTrackEntity)
 
                 _uiState.update { it.copy(isSaving = false, saveSuccess = true) }
