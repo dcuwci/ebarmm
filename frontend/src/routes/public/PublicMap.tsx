@@ -3,7 +3,7 @@
  * Displays all projects with geometry on an interactive Leaflet map
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
@@ -21,6 +21,7 @@ import LinearProgress from '@mui/material/LinearProgress';
 import Tooltip from '@mui/material/Tooltip';
 import { Search, X, MapPin, Home } from 'lucide-react';
 import { LeafletMap } from '../../components/map/LeafletMap';
+import { TimelineSlider } from '../../components/map/TimelineSlider';
 import { LoadingSpinner } from '../../components/mui';
 import { apiClient } from '../../api/client';
 
@@ -32,6 +33,11 @@ interface Project {
   geometry_wkt?: string;
   current_progress?: number;
   project_cost?: number;
+  fund_year?: number;
+}
+
+interface StatsResponse {
+  fund_years: number[];
 }
 
 interface ProjectsResponse {
@@ -52,6 +58,7 @@ export default function PublicMap() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>();
   const [searchTerm, setSearchTerm] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
   // Fetch all projects with geometry
   const { data, isLoading, error } = useQuery<ProjectsResponse>({
@@ -62,20 +69,46 @@ export default function PublicMap() {
     },
   });
 
-  // Filter projects that have geometry and match search
-  const projectsWithGeometry = data?.items.filter((p) => {
-    const matchesSearch = !searchTerm ||
-      p.project_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.location?.toLowerCase().includes(searchTerm.toLowerCase());
-    return p.geometry_wkt && matchesSearch;
-  }) || [];
+  // Fetch available fund years
+  const { data: statsData } = useQuery<StatsResponse>({
+    queryKey: ['publicStats'],
+    queryFn: async () => {
+      const response = await apiClient.get('/public/stats');
+      return response.data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const availableYears = statsData?.fund_years || [];
+
+  // Filter projects by year, search, and geometry
+  const projectsWithGeometry = useMemo(() => {
+    return data?.items.filter((p) => {
+      // Year filter
+      if (selectedYear !== null && p.fund_year !== selectedYear) {
+        return false;
+      }
+      // Search filter
+      const matchesSearch = !searchTerm ||
+        p.project_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.location?.toLowerCase().includes(searchTerm.toLowerCase());
+      return p.geometry_wkt && matchesSearch;
+    }) || [];
+  }, [data, selectedYear, searchTerm]);
 
   // All projects for sidebar list (with or without geometry)
-  const filteredProjects = data?.items.filter((p) => {
-    if (!searchTerm) return true;
-    return p.project_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.location?.toLowerCase().includes(searchTerm.toLowerCase());
-  }) || [];
+  const filteredProjects = useMemo(() => {
+    return data?.items.filter((p) => {
+      // Year filter
+      if (selectedYear !== null && p.fund_year !== selectedYear) {
+        return false;
+      }
+      // Search filter
+      if (!searchTerm) return true;
+      return p.project_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.location?.toLowerCase().includes(searchTerm.toLowerCase());
+    }) || [];
+  }, [data, selectedYear, searchTerm]);
 
   const handleProjectSelect = (project: { project_id: string }) => {
     setSelectedProjectId(project.project_id);
@@ -269,6 +302,27 @@ export default function PublicMap() {
           height="100%"
           showThemeToggle={true}
         />
+
+        {/* Timeline Slider */}
+        {availableYears.length > 1 && (
+          <Box
+            sx={{
+              position: 'absolute',
+              bottom: 24,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 1100,
+              pointerEvents: 'auto',
+            }}
+          >
+            <TimelineSlider
+              years={availableYears}
+              selectedYear={selectedYear}
+              onChange={setSelectedYear}
+              enableAutoPlay
+            />
+          </Box>
+        )}
       </Box>
     </Box>
   );

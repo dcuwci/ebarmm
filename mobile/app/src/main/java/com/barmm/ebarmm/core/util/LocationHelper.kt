@@ -31,7 +31,31 @@ class LocationHelper @Inject constructor(
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    fun getLocationUpdates(): Flow<Location> = callbackFlow {
+    /**
+     * Standard location updates (10 second interval)
+     * Use for general location tracking
+     */
+    fun getLocationUpdates(): Flow<Location> = getLocationUpdatesWithInterval(
+        intervalMs = DEFAULT_INTERVAL_MS,
+        minIntervalMs = DEFAULT_MIN_INTERVAL_MS
+    )
+
+    /**
+     * High-frequency location updates for RouteShoot GPS tracking
+     * Provides 1-second updates synchronized with video recording
+     */
+    fun getHighFrequencyLocationUpdates(): Flow<Location> = getLocationUpdatesWithInterval(
+        intervalMs = HIGH_FREQUENCY_INTERVAL_MS,
+        minIntervalMs = HIGH_FREQUENCY_MIN_INTERVAL_MS
+    )
+
+    /**
+     * Custom interval location updates
+     */
+    fun getLocationUpdatesWithInterval(
+        intervalMs: Long,
+        minIntervalMs: Long = intervalMs / 2
+    ): Flow<Location> = callbackFlow {
         if (!hasLocationPermission()) {
             Timber.w("Location permission not granted")
             close()
@@ -40,8 +64,8 @@ class LocationHelper @Inject constructor(
 
         val locationRequest = LocationRequest.Builder(
             Priority.PRIORITY_HIGH_ACCURACY,
-            10000L // 10 seconds
-        ).setMinUpdateIntervalMillis(5000L) // 5 seconds
+            intervalMs
+        ).setMinUpdateIntervalMillis(minIntervalMs)
             .build()
 
         val locationCallback = object : LocationCallback() {
@@ -79,5 +103,15 @@ class LocationHelper @Inject constructor(
             Timber.e(e, "Failed to get current location")
             null
         }
+    }
+
+    companion object {
+        /** Default interval for standard location updates (10 seconds) */
+        const val DEFAULT_INTERVAL_MS = 10_000L
+        const val DEFAULT_MIN_INTERVAL_MS = 5_000L
+
+        /** High-frequency interval for RouteShoot GPS tracking (1 second) */
+        const val HIGH_FREQUENCY_INTERVAL_MS = 1_000L
+        const val HIGH_FREQUENCY_MIN_INTERVAL_MS = 500L
     }
 }

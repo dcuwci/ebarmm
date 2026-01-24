@@ -29,6 +29,7 @@ import com.barmm.ebarmm.presentation.media.CameraCaptureScreen
 import com.barmm.ebarmm.presentation.progress.ProgressReportScreen
 import com.barmm.ebarmm.presentation.project.ProjectDetailScreen
 import com.barmm.ebarmm.presentation.project.ProjectListScreen
+import com.barmm.ebarmm.presentation.routeshoot.RouteShootScreen
 
 sealed class Screen(val route: String) {
     object Login : Screen("login")
@@ -47,6 +48,15 @@ sealed class Screen(val route: String) {
                 "camera_capture/$projectId?progressLocalId=$progressLocalId"
             } else {
                 "camera_capture/$projectId"
+            }
+        }
+    }
+    object RouteShoot : Screen("routeshoot/{projectId}?progressLocalId={progressLocalId}") {
+        fun createRoute(projectId: String, progressLocalId: String? = null): String {
+            return if (progressLocalId != null) {
+                "routeshoot/$projectId?progressLocalId=$progressLocalId"
+            } else {
+                "routeshoot/$projectId"
             }
         }
     }
@@ -194,6 +204,23 @@ fun NavGraph(
                     projectId = projectId,
                     progressLocalId = progressLocalId,
                     onPhotoSaved = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.RouteShoot.route,
+                arguments = listOf(
+                    navArgument("projectId") { type = NavType.StringType },
+                    navArgument("progressLocalId") {
+                        type = NavType.StringType
+                        nullable = true
+                    }
+                )
+            ) {
+                RouteShootScreen(
+                    onNavigateBack = {
                         navController.popBackStack()
                     }
                 )
