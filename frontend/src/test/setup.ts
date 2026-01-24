@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom'
-import { afterEach } from 'vitest'
+import { afterEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 
 // Cleanup after each test case (e.g., clearing jsdom)
@@ -14,31 +14,42 @@ Object.defineProperty(window, 'matchMedia', {
     matches: false,
     media: query,
     onchange: null,
-    addListener: () => {},
-    removeListener: () => {},
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    dispatchEvent: () => false,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(() => false),
   }),
 })
 
 // Mock ResizeObserver for components that use it
-global.ResizeObserver = class ResizeObserver {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
+class MockResizeObserver {
+  observe = vi.fn()
+  unobserve = vi.fn()
+  disconnect = vi.fn()
 }
 
+// @ts-expect-error - global ResizeObserver mock
+globalThis.ResizeObserver = MockResizeObserver
+
 // Mock IntersectionObserver for lazy loading components
-global.IntersectionObserver = class IntersectionObserver {
-  constructor() {}
+class MockIntersectionObserver {
   root = null
   rootMargin = ''
-  thresholds = []
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-  takeRecords() {
-    return []
-  }
+  thresholds: number[] = []
+
+  observe = vi.fn()
+  unobserve = vi.fn()
+  disconnect = vi.fn()
+  takeRecords = vi.fn(() => [])
 }
+
+// @ts-expect-error - global IntersectionObserver mock
+globalThis.IntersectionObserver = MockIntersectionObserver
+
+// Mock import.meta.env for tests
+vi.stubGlobal('import.meta', {
+  env: {
+    VITE_API_BASE_URL: 'http://localhost:8000/api/v1',
+  },
+})

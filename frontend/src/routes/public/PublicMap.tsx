@@ -301,6 +301,7 @@ export default function PublicMap() {
           onProjectSelect={handleProjectSelect}
           height="100%"
           showThemeToggle={true}
+          autoFitBounds={selectedYear === null}
         />
 
         {/* Timeline Slider */}

@@ -65,6 +65,8 @@ interface LeafletMapProps {
   height?: string | number;
   showThemeToggle?: boolean;
   children?: React.ReactNode;
+  /** Whether to auto-fit bounds when projects change (default: true) */
+  autoFitBounds?: boolean;
 }
 
 /**
@@ -73,13 +75,15 @@ interface LeafletMapProps {
 const MapBoundsFitter: React.FC<{
   projects?: Project[];
   selectedProjectId?: string;
-}> = ({ projects, selectedProjectId }) => {
+  autoFitBounds?: boolean;
+}> = ({ projects, selectedProjectId, autoFitBounds = true }) => {
   const map = useMap();
+  const hasInitiallyFitted = React.useRef(false);
 
   useEffect(() => {
     if (!projects || projects.length === 0) return;
 
-    // If a project is selected, fit to its bounds
+    // If a project is selected, always fit to its bounds (user explicitly selected it)
     if (selectedProjectId) {
       const selectedProject = projects.find(
         (p) => p.project_id === selectedProjectId
@@ -96,7 +100,17 @@ const MapBoundsFitter: React.FC<{
       return;
     }
 
-    // Otherwise, fit to all projects
+    // Skip fitting bounds if autoFitBounds is disabled (e.g., timeline filter active)
+    if (!autoFitBounds) {
+      return;
+    }
+
+    // Only fit bounds once on initial load
+    if (hasInitiallyFitted.current) {
+      return;
+    }
+
+    // Fit to all projects
     const allBounds: L.LatLngBounds[] = [];
     projects.forEach((project) => {
       if (project.geometry_wkt) {
@@ -115,8 +129,9 @@ const MapBoundsFitter: React.FC<{
         acc.extend(bounds)
       );
       map.fitBounds(combinedBounds, { padding: [50, 50] });
+      hasInitiallyFitted.current = true;
     }
-  }, [map, projects, selectedProjectId]);
+  }, [map, projects, selectedProjectId, autoFitBounds]);
 
   return null;
 };
@@ -242,6 +257,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   height = '100%',
   showThemeToggle = true,
   children,
+  autoFitBounds = true,
 }) => {
   const { mode, toggleTheme } = useTheme();
   const tileLayer = mode === 'dark' ? TILE_LAYERS.dark : TILE_LAYERS.light;
@@ -260,6 +276,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
         <MapBoundsFitter
           projects={projects}
           selectedProjectId={selectedProjectId}
+          autoFitBounds={autoFitBounds}
         />
 
         <ProjectFeatures
