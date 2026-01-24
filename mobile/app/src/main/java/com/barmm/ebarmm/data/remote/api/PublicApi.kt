@@ -1,5 +1,6 @@
 package com.barmm.ebarmm.data.remote.api
 
+import com.barmm.ebarmm.data.remote.dto.FilterOptionsResponse
 import com.barmm.ebarmm.data.remote.dto.PublicProjectsResponse
 import com.barmm.ebarmm.data.remote.dto.StatsResponse
 import retrofit2.Response
@@ -12,7 +13,14 @@ interface PublicApi {
 
     @GET("/api/v1/public/projects")
     suspend fun getPublicProjects(
-        @Query("skip") skip: Int = 0,
-        @Query("limit") limit: Int = 200
+        @Query("offset") offset: Int = 0,
+        @Query("limit") limit: Int = 200,
+        @Query("search") search: String? = null,
+        @Query("status") status: String? = null,
+        @Query("deo_id") deoId: Int? = null,
+        @Query("fund_year") fundYear: Int? = null
     ): Response<PublicProjectsResponse>
+
+    @GET("/api/v1/public/filter-options")
+    suspend fun getFilterOptions(): Response<FilterOptionsResponse>
 }
