@@ -65,7 +65,20 @@ fun DashboardScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Dashboard") },
+                title = {
+                    Column {
+                        Text(
+                            text = "E-BARMM",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Dashboard",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 actions = {
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
@@ -93,7 +106,6 @@ fun DashboardScreen(
             ) {
                 // User info card
                 item {
-                    Spacer(modifier = Modifier.height(8.dp))
                     UserInfoCard(
                         user = uiState.currentUser,
                         isLoggingOut = uiState.isLoggingOut,
@@ -102,6 +114,7 @@ fun DashboardScreen(
                 }
 
                 item {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Overview",
                         style = MaterialTheme.typography.titleLarge,
@@ -341,13 +354,13 @@ private fun UserInfoCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -358,29 +371,22 @@ private fun UserInfoCard(
                 Icon(
                     imageVector = Icons.Default.AccountCircle,
                     contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    modifier = Modifier.size(32.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Column {
                     Text(
-                        text = user?.let { it.firstName ?: it.username } ?: "Loading...",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        text = user?.let { it.firstName ?: it.username } ?: "...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = user?.role?.replace("_", " ")?.replaceFirstChar { it.uppercase() } ?: "",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
-                    if (user?.email != null) {
-                        Text(
-                            text = user.email,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                        )
-                    }
                 }
             }
             TextButton(
@@ -389,17 +395,17 @@ private fun UserInfoCard(
             ) {
                 if (isLoggingOut) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(14.dp),
                         strokeWidth = 2.dp
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Default.Logout,
                         contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Logout")
+                    Text("Logout", style = MaterialTheme.typography.labelMedium)
                 }
             }
         }

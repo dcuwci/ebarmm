@@ -6,7 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -36,25 +36,7 @@ fun ProjectListScreen(
                 title = { Text("Projects") },
                 actions = {
                     IconButton(onClick = { viewModel.refreshProjects() }) {
-                        if (syncStatus.isSyncing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            BadgedBox(
-                                badge = {
-                                    if (syncStatus.pendingCount > 0) {
-                                        Badge { Text(syncStatus.pendingCount.toString()) }
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Sync,
-                                    contentDescription = "Sync"
-                                )
-                            }
-                        }
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
                 }
             )
