@@ -3,6 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 <!-- Last reviewed: 2026-01-24 -->
+<!-- Last updated: 2026-01-24 -->
 
 ## Quick Commands
 
@@ -58,39 +59,114 @@ backend/app/
 │   ├── config.py        # Settings via pydantic-settings
 │   ├── database.py      # SQLAlchemy async engine
 │   └── security.py      # JWT + password hashing
-├── api/                 # Route handlers (auth, users, projects, progress, gis, media)
-├── models/              # SQLAlchemy ORM models
-├── schemas/             # Pydantic request/response schemas
-└── services/            # Business logic (permissions, audit, mfa)
+├── api/                 # Route handlers
+│   ├── auth.py          # Authentication endpoints
+│   ├── users.py         # User management
+│   ├── projects.py      # Project CRUD
+│   ├── progress.py      # Progress reports
+│   ├── gis.py           # GIS/spatial endpoints
+│   ├── media.py         # Media upload/download
+│   ├── public.py        # Public endpoints
+│   ├── access_rights.py # Group-based access control
+│   ├── audit.py         # Audit trail endpoints
+│   ├── groups.py        # User group management
+│   └── reports.py       # Report generation
+├── models/              # SQLAlchemy ORM models (defined in __init__.py)
+├── schemas/             # Pydantic request/response schemas (defined in __init__.py)
+└── services/
+    ├── permissions.py   # Permission checks
+    ├── audit_service.py # Audit logging
+    ├── mfa_service.py   # Multi-factor auth
+    ├── pdf_generator.py # PDF report generation
+    ├── report_service.py    # Report business logic
+    └── thumbnail_service.py # Image thumbnail generation
 ```
 
 ### Frontend (React + TypeScript)
 ```
 frontend/src/
 ├── App.tsx              # Router setup (public/admin/auth routes)
+├── main.tsx             # Entry point (React 18)
 ├── api/                 # Axios client + endpoint wrappers
 ├── stores/              # Zustand stores (authStore, permissionStore)
-├── routes/              # Page components (public/, admin/, auth/)
-└── components/          # Reusable UI (layout/, map/, media/, common/)
+├── routes/
+│   ├── public/          # Public-facing pages
+│   ├── auth/            # Login, registration
+│   └── admin/           # Admin dashboard
+│       └── settings/    # Admin settings pages
+│           ├── AccessRightsSettings.tsx
+│           ├── AuditLogs.tsx
+│           ├── GroupsSettings.tsx
+│           └── UsersSettings.tsx
+├── components/
+│   ├── layout/          # Layout components
+│   ├── map/             # Map/GIS components
+│   ├── media/           # Media upload/display
+│   ├── common/          # Shared components
+│   ├── auth/            # Auth-related components
+│   ├── progress/        # Progress report components
+│   ├── audit/           # Audit log UI
+│   └── permissions/     # Permission management UI
+├── types/               # TypeScript type definitions
+├── utils/               # Utility functions
+├── styles/              # Global styles
+└── theme/               # MUI theme configuration
 ```
 
 ### Mobile (Kotlin + Jetpack Compose)
 ```
 mobile/app/src/main/java/com/barmm/ebarmm/
 ├── MainActivity.kt              # Entry point
+├── EBarmmApplication.kt         # Application class (Hilt)
 ├── navigation/NavGraph.kt       # Navigation with bottom nav (Dashboard, Projects, Map)
 ├── presentation/
 │   ├── dashboard/               # Stats cards + recent projects
 │   ├── map/                     # OpenStreetMap view with project geometries
-│   ├── project/                 # Project list
+│   ├── project/                 # Project list + detail
 │   ├── progress/                # Progress report form
-│   └── auth/                    # Login screen
+│   ├── auth/                    # Login screen
+│   └── routeshoot/              # Route shooting feature (GPS track recording)
 ├── data/
-│   ├── local/database/          # Room database (entities, DAOs)
-│   ├── remote/api/              # Retrofit API interfaces
+│   ├── local/database/
+│   │   ├── AppDatabase.kt       # Room database
+│   │   ├── dao/                 # Data Access Objects
+│   │   │   ├── ProjectDao.kt
+│   │   │   ├── MediaDao.kt
+│   │   │   ├── ProgressDao.kt
+│   │   │   ├── GpsTrackDao.kt   # GPS track persistence
+│   │   │   ├── UserDao.kt
+│   │   │   └── SyncQueueDao.kt  # Offline sync queue
+│   │   └── entity/              # Room entities
+│   │       ├── ProjectEntity.kt
+│   │       ├── GpsTrackEntity.kt
+│   │       ├── GpsWaypoint.kt
+│   │       ├── SyncQueueEntity.kt
+│   │       └── UserEntity.kt
+│   ├── remote/api/
+│   │   ├── ApiService.kt        # Retrofit API interface
+│   │   ├── dto/                 # Data Transfer Objects
+│   │   └── interceptor/         # Auth interceptor, token refresh
 │   ├── repository/              # Repository implementations
-│   └── sync/worker/             # WorkManager sync workers
-└── di/                          # Hilt dependency injection modules
+│   ├── mapper/                  # Entity <-> DTO mappers
+│   └── sync/
+│       ├── queue/SyncQueueManager.kt  # Offline queue management
+│       └── worker/              # WorkManager sync workers
+├── domain/                      # Repository interfaces
+│   ├── ProjectRepository.kt
+│   ├── GpsTrackRepository.kt
+│   └── StatsRepository.kt
+├── core/
+│   ├── security/                # Token management, hash calculation
+│   └── util/
+│       ├── LocationHelper.kt    # GPS utilities
+│       ├── GpsTrackRecorder.kt  # Track recording
+│       ├── GpxKmlGenerator.kt   # Export to GPX/KML
+│       ├── KmlParser.kt         # KML import
+│       └── NetworkMonitor.kt    # Connectivity monitoring
+├── service/
+│   └── RouteShootService.kt     # Foreground service for GPS tracking
+├── di/                          # Hilt DI modules
+└── ui/theme/                    # Compose theme (Color, Type, Theme)
 ```
 
 ### Key Patterns
@@ -106,6 +182,10 @@ mobile/app/src/main/java/com/barmm/ebarmm/
 **File Storage**: MinIO (S3-compatible) on port 9000, bucket `ebarmm-media`
 
 **GIS**: PostGIS for spatial data, Leaflet + react-leaflet for rendering
+
+**Mobile Offline Sync**: Room database with sync queue; WorkManager handles background sync when connectivity restored
+
+**GPS Tracking (Mobile)**: Foreground service records GPS tracks; exports to GPX/KML formats
 
 ### API Communication
 - Base URL (Frontend): `VITE_API_BASE_URL` (default: `http://localhost:8000/api/v1`)
@@ -138,3 +218,17 @@ mobile/app/src/main/java/com/barmm/ebarmm/
 | Redis | 6379 |
 | MinIO API | 9000 |
 | MinIO Console | 9001 |
+
+## Related Documentation
+
+| File | Description |
+|------|-------------|
+| `README.md` | Project overview and setup |
+| `QUICKSTART.md` | Quick start guide |
+| `ARCHITECTURE.md` | System architecture details |
+| `API_DESIGN.md` | API endpoint specifications |
+| `FRONTEND_DESIGN.md` | Frontend design patterns |
+| `MOBILE_STRATEGY.md` | Mobile app strategy |
+| `DATABASE_MAPPING.md` | Database schema reference |
+| `SECURITY.md` | Security implementation details |
+| `MIGRATION.md` | Database migration instructions |
