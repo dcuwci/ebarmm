@@ -69,5 +69,32 @@ data class MediaEntity(
     val syncError: String?,
 
     @ColumnInfo(name = "synced_at")
-    val syncedAt: Long?
-)
+    val syncedAt: Long?,
+
+    // ==========================================
+    // Video support fields (added in version 3)
+    // ==========================================
+
+    /** Media type: "photo" or "video" */
+    @ColumnInfo(name = "media_type", defaultValue = "photo")
+    val mediaType: String = MEDIA_TYPE_PHOTO,
+
+    /** Video duration in milliseconds (null for photos) */
+    @ColumnInfo(name = "duration_ms")
+    val durationMs: Long? = null,
+
+    /** Path to video thumbnail image (null for photos) */
+    @ColumnInfo(name = "thumbnail_path")
+    val thumbnailPath: String? = null
+) {
+    companion object {
+        const val MEDIA_TYPE_PHOTO = "photo"
+        const val MEDIA_TYPE_VIDEO = "video"
+    }
+
+    /** Check if this is a video */
+    fun isVideo(): Boolean = mediaType == MEDIA_TYPE_VIDEO
+
+    /** Check if this is a photo */
+    fun isPhoto(): Boolean = mediaType == MEDIA_TYPE_PHOTO
+}
