@@ -571,6 +571,38 @@ class ErrorResponse(BaseModel):
 
 
 # =============================================================================
+# REPORTS
+# =============================================================================
+
+class ReportResponse(BaseModel):
+    """PDF report generation response"""
+    report_id: str
+    report_type: str
+    document_hash: str
+    download_url: Optional[str] = None  # For S3 format
+    generated_at: datetime
+    verification_url: str
+
+    class Config:
+        from_attributes = True
+
+
+class ReportMetadata(BaseModel):
+    """Report metadata for audit logging"""
+    report_id: str
+    report_type: str
+    project_id: Optional[UUID] = None
+    document_hash: str
+    generated_at: datetime
+    verification_url: str
+    filters: Optional[List[str]] = None
+    total_projects: Optional[int] = None
+    projects_in_report: Optional[int] = None
+    total_logs: Optional[int] = None
+    chain_valid: Optional[bool] = None
+
+
+# =============================================================================
 # MODEL REBUILDS (for forward references in Pydantic v2)
 # =============================================================================
 

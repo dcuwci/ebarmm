@@ -27,6 +27,7 @@ import com.barmm.ebarmm.presentation.dashboard.DashboardScreen
 import com.barmm.ebarmm.presentation.map.MapScreen
 import com.barmm.ebarmm.presentation.media.CameraCaptureScreen
 import com.barmm.ebarmm.presentation.progress.ProgressReportScreen
+import com.barmm.ebarmm.presentation.project.ProjectDetailScreen
 import com.barmm.ebarmm.presentation.project.ProjectListScreen
 
 sealed class Screen(val route: String) {
@@ -34,6 +35,9 @@ sealed class Screen(val route: String) {
     object Dashboard : Screen("dashboard")
     object ProjectList : Screen("project_list")
     object Map : Screen("map")
+    object ProjectDetail : Screen("project_detail/{projectId}") {
+        fun createRoute(projectId: String) = "project_detail/$projectId"
+    }
     object ProgressReport : Screen("progress_report/{projectId}") {
         fun createRoute(projectId: String) = "progress_report/$projectId"
     }
@@ -117,7 +121,7 @@ fun NavGraph(
             composable(Screen.Dashboard.route) {
                 DashboardScreen(
                     onProjectClick = { projectId ->
-                        navController.navigate(Screen.ProgressReport.createRoute(projectId))
+                        navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                     }
                 )
             }
@@ -125,7 +129,7 @@ fun NavGraph(
             composable(Screen.ProjectList.route) {
                 ProjectListScreen(
                     onProjectClick = { projectId ->
-                        navController.navigate(Screen.ProgressReport.createRoute(projectId))
+                        navController.navigate(Screen.ProjectDetail.createRoute(projectId))
                     },
                     onSyncClick = {
                         // Trigger manual sync via WorkManager
@@ -136,7 +140,25 @@ fun NavGraph(
             composable(Screen.Map.route) {
                 MapScreen(
                     onProjectClick = { projectId ->
-                        navController.navigate(Screen.ProgressReport.createRoute(projectId))
+                        navController.navigate(Screen.ProjectDetail.createRoute(projectId))
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.ProjectDetail.route,
+                arguments = listOf(
+                    navArgument("projectId") { type = NavType.StringType }
+                )
+            ) {
+                val projectId = it.arguments?.getString("projectId") ?: return@composable
+                ProjectDetailScreen(
+                    projectId = projectId,
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    },
+                    onReportProgress = { id ->
+                        navController.navigate(Screen.ProgressReport.createRoute(id))
                     }
                 )
             }

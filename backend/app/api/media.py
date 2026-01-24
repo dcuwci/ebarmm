@@ -3,7 +3,9 @@ Media API Endpoints
 S3 pre-signed URLs for file upload, storage metadata
 """
 
+import io
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import and_
@@ -25,6 +27,12 @@ from ..schemas import (
     GeotaggedMediaResponse
 )
 from ..api.auth import get_current_user, require_role
+from ..services.thumbnail_service import (
+    generate_and_store_thumbnail,
+    get_thumbnail,
+    get_cached_image,
+    get_thumbnail_key
+)
 
 router = APIRouter()
 
@@ -269,6 +277,17 @@ async def confirm_upload(
         media.attributes['confirmed_at'] = datetime.utcnow().isoformat()
         # Flag JSONB column as modified so SQLAlchemy detects the change
         flag_modified(media, 'attributes')
+
+        # Generate thumbnail for photos (async in background would be better for production)
+        if media.media_type == 'photo':
+            try:
+                thumbnail_key = generate_and_store_thumbnail(media.storage_key, size=300)
+                if thumbnail_key:
+                    media.attributes['thumbnail_key'] = thumbnail_key
+                    flag_modified(media, 'attributes')
+            except Exception as e:
+                # Don't fail the confirm if thumbnail generation fails
+                print(f"Warning: Thumbnail generation failed: {e}")
 
     except ClientError as e:
         if e.response['Error']['Code'] == '404':
@@ -528,3 +547,199 @@ async def delete_media_asset(
     db.commit()
 
     return None
+
+
+@router.get("/{media_id}/thumbnail")
+async def get_media_thumbnail(
+    media_id: UUID,
+    size: int = Query(default=300, le=600, ge=50),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get thumbnail version of a media file.
+
+    Returns a smaller, cached version of the image for efficient loading.
+    Thumbnails are generated on-demand and cached.
+
+    Args:
+        media_id: Media asset ID
+        size: Maximum dimension (50-600, default 300)
+    """
+    media = db.query(MediaAsset).filter(MediaAsset.media_id == media_id).first()
+
+    if not media:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Media asset not found"
+        )
+
+    # RBAC check
+    project = db.query(Project).filter(Project.project_id == media.project_id).first()
+    if current_user.role == "deo_user" and project and project.deo_id != current_user.deo_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this media asset"
+        )
+
+    # Only photos have thumbnails
+    if media.media_type != 'photo':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Thumbnails are only available for photos"
+        )
+
+    try:
+        # Get thumbnail (uses cache, generates if needed)
+        result = get_thumbnail(media.storage_key, size=size)
+
+        if result is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Failed to get or generate thumbnail"
+            )
+
+        thumbnail_data, content_type = result
+
+        return StreamingResponse(
+            io.BytesIO(thumbnail_data),
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f"inline; filename=\"thumb_{media.attributes.get('filename', 'file') if media.attributes else 'file'}\"",
+                "Cache-Control": "public, max-age=86400"  # Cache for 24 hours
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve thumbnail: {str(e)}"
+        )
+
+
+@router.get("/{media_id}/file")
+async def get_media_file(
+    media_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Proxy endpoint to stream media file from S3 with caching.
+
+    This endpoint is useful for mobile apps that can't access MinIO directly.
+    Returns the actual file content with proper content-type.
+    Includes in-memory caching for frequently accessed files.
+    """
+    media = db.query(MediaAsset).filter(MediaAsset.media_id == media_id).first()
+
+    if not media:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Media asset not found"
+        )
+
+    # RBAC check
+    project = db.query(Project).filter(Project.project_id == media.project_id).first()
+    if current_user.role == "deo_user" and project and project.deo_id != current_user.deo_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this media asset"
+        )
+
+    try:
+        # Use cached image retrieval
+        result = get_cached_image(media.storage_key)
+
+        if result is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="File not found in storage"
+            )
+
+        image_data, content_type = result
+        content_type = media.mime_type or content_type
+
+        return StreamingResponse(
+            io.BytesIO(image_data),
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f"inline; filename=\"{media.attributes.get('filename', 'file') if media.attributes else 'file'}\"",
+                "Cache-Control": "public, max-age=3600"  # Cache for 1 hour
+            }
+        )
+    except HTTPException:
+        raise
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchKey':
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="File not found in storage"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve file: {str(e)}"
+        )
+
+
+@router.post("/admin/generate-thumbnails")
+async def generate_all_thumbnails(
+    current_user: User = Depends(require_role(['super_admin'])),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate thumbnails for all existing photos that don't have them.
+
+    Admin-only endpoint to backfill thumbnails for photos uploaded before
+    thumbnail generation was implemented.
+    """
+    # Get all confirmed photos
+    photos = db.query(MediaAsset).filter(
+        and_(
+            MediaAsset.media_type == 'photo',
+            MediaAsset.attributes['status'].astext == 'confirmed'
+        )
+    ).all()
+
+    results = {
+        "total": len(photos),
+        "generated": 0,
+        "skipped": 0,
+        "failed": 0,
+        "errors": []
+    }
+
+    for photo in photos:
+        # Check if thumbnail already exists
+        thumbnail_key = get_thumbnail_key(photo.storage_key, 300)
+
+        try:
+            # Check if thumbnail exists in S3
+            s3_client.head_object(
+                Bucket=settings.S3_BUCKET,
+                Key=thumbnail_key
+            )
+            results["skipped"] += 1
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                # Thumbnail doesn't exist, generate it
+                try:
+                    generated_key = generate_and_store_thumbnail(photo.storage_key, size=300)
+                    if generated_key:
+                        # Update media record with thumbnail key
+                        if photo.attributes is None:
+                            photo.attributes = {}
+                        photo.attributes['thumbnail_key'] = generated_key
+                        flag_modified(photo, 'attributes')
+                        results["generated"] += 1
+                    else:
+                        results["failed"] += 1
+                        results["errors"].append(f"Failed to generate: {photo.storage_key}")
+                except Exception as gen_error:
+                    results["failed"] += 1
+                    results["errors"].append(f"{photo.storage_key}: {str(gen_error)}")
+            else:
+                results["failed"] += 1
+                results["errors"].append(f"S3 error for {photo.storage_key}: {str(e)}")
+
+    db.commit()
+
+    return results

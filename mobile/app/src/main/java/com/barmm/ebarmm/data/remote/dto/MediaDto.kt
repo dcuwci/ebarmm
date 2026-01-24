@@ -24,15 +24,32 @@ data class RegisterMediaRequest(
 )
 
 data class MediaResponse(
-    val id: String,
+    @SerializedName("media_id") val id: String,
     @SerializedName("project_id") val projectId: String,
-    @SerializedName("progress_id") val progressId: String?,
-    @SerializedName("file_name") val fileName: String,
-    @SerializedName("file_size") val fileSize: Long,
-    @SerializedName("mime_type") val mimeType: String,
-    val url: String,
+    @SerializedName("media_type") val mediaType: String?,
+    @SerializedName("storage_key") val storageKey: String?,
+    @SerializedName("download_url") val url: String?,
+    @SerializedName("file_size") val fileSize: Long?,
+    @SerializedName("mime_type") val mimeType: String?,
     val latitude: Double?,
     val longitude: Double?,
-    @SerializedName("uploaded_at") val uploadedAt: String,
-    @SerializedName("uploaded_by") val uploadedBy: String
+    @SerializedName("uploaded_at") val uploadedAt: String?,
+    @SerializedName("uploaded_by") val uploadedBy: String?,
+    val attributes: Map<String, Any>?
+) {
+    // Extract filename from attributes or storage_key
+    val fileName: String
+        get() = (attributes?.get("filename") as? String)
+            ?: storageKey?.substringAfterLast("/")
+            ?: "Photo"
+}
+
+data class GeotaggedMediaResponse(
+    @SerializedName("media_id") val mediaId: String,
+    @SerializedName("project_id") val projectId: String,
+    @SerializedName("project_title") val projectTitle: String,
+    val latitude: Double,
+    val longitude: Double,
+    @SerializedName("thumbnail_url") val thumbnailUrl: String?,
+    val filename: String?
 )

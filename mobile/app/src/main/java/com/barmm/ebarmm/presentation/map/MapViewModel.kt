@@ -2,12 +2,16 @@ package com.barmm.ebarmm.presentation.map
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.barmm.ebarmm.data.local.database.dao.MediaDao
+import com.barmm.ebarmm.data.local.database.dao.ProjectDao
+import com.barmm.ebarmm.data.remote.api.MediaApi
 import com.barmm.ebarmm.data.remote.dto.PublicProjectResponse
 import com.barmm.ebarmm.domain.repository.StatsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.osmdroid.util.GeoPoint
@@ -17,7 +21,8 @@ data class MapUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
     val projects: List<PublicProjectResponse> = emptyList(),
-    val selectedProject: PublicProjectResponse? = null
+    val selectedProject: PublicProjectResponse? = null,
+    val photoMarkers: List<PhotoMarker> = emptyList()
 )
 
 sealed class ProjectGeometry {
@@ -42,6 +47,14 @@ sealed class ProjectGeometry {
         val points: List<GeoPoint>
     ) : ProjectGeometry()
 
+    data class MultiLine(
+        override val projectId: String,
+        override val title: String,
+        override val status: String,
+        override val progress: Double,
+        val segments: List<List<GeoPoint>>
+    ) : ProjectGeometry()
+
     data class Polygon(
         override val projectId: String,
         override val title: String,
@@ -53,7 +66,10 @@ sealed class ProjectGeometry {
 
 @HiltViewModel
 class MapViewModel @Inject constructor(
-    private val statsRepository: StatsRepository
+    private val statsRepository: StatsRepository,
+    private val mediaApi: MediaApi,
+    private val mediaDao: MediaDao,
+    private val projectDao: ProjectDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MapUiState())
@@ -61,6 +77,7 @@ class MapViewModel @Inject constructor(
 
     init {
         loadProjects()
+        loadPhotoMarkers()
     }
 
     fun loadProjects() {
@@ -85,6 +102,64 @@ class MapViewModel @Inject constructor(
                     }
                 }
             )
+        }
+    }
+
+    private fun loadPhotoMarkers() {
+        viewModelScope.launch {
+            val photoMarkers = mutableListOf<PhotoMarker>()
+
+            // First try to fetch from backend (photos uploaded via web)
+            try {
+                val response = mediaApi.getGeotaggedMedia(limit = 100)
+                if (response.isSuccessful && response.body() != null) {
+                    response.body()!!.forEach { media ->
+                        photoMarkers.add(
+                            PhotoMarker(
+                                mediaId = media.mediaId,
+                                projectId = media.projectId,
+                                projectTitle = media.projectTitle,
+                                latitude = media.latitude,
+                                longitude = media.longitude,
+                                fileName = media.filename ?: "Photo",
+                                filePath = null // Backend photos don't have local path
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                // Backend fetch failed, continue with local photos
+            }
+
+            // Also include local photos not yet synced
+            try {
+                val allProjects = projectDao.getAllProjects().first()
+                val existingIds = photoMarkers.map { it.mediaId }.toSet()
+
+                for (project in allProjects) {
+                    val projectMedia = mediaDao.getMediaByProject(project.projectId).first()
+                    projectMedia
+                        .filter { it.latitude != null && it.longitude != null }
+                        .filter { it.localId !in existingIds } // Avoid duplicates
+                        .forEach { media ->
+                            photoMarkers.add(
+                                PhotoMarker(
+                                    mediaId = media.localId,
+                                    projectId = media.projectId,
+                                    projectTitle = project.name,
+                                    latitude = media.latitude!!,
+                                    longitude = media.longitude!!,
+                                    fileName = media.fileName,
+                                    filePath = media.filePath
+                                )
+                            )
+                        }
+                }
+            } catch (e: Exception) {
+                // Local fetch failed, continue with what we have
+            }
+
+            _uiState.update { it.copy(photoMarkers = photoMarkers) }
         }
     }
 
@@ -129,9 +204,9 @@ class MapViewModel @Inject constructor(
                     } else null
                 }
                 upperWkt.startsWith("MULTILINESTRING") -> {
-                    val points = parseMultiLineString(wkt)
-                    if (points.isNotEmpty()) {
-                        ProjectGeometry.Line(projectId, title, status, progress, points)
+                    val segments = parseMultiLineString(wkt)
+                    if (segments.isNotEmpty()) {
+                        ProjectGeometry.MultiLine(projectId, title, status, progress, segments)
                     } else null
                 }
                 upperWkt.startsWith("POLYGON") -> {
@@ -174,18 +249,22 @@ class MapViewModel @Inject constructor(
         return parseCoordinateString(coordString)
     }
 
-    private fun parseMultiLineString(wkt: String): List<GeoPoint> {
-        // Extract all coordinate pairs from MULTILINESTRING
-        val points = mutableListOf<GeoPoint>()
+    private fun parseMultiLineString(wkt: String): List<List<GeoPoint>> {
+        // Extract individual line strings from MULTILINESTRING
+        // Returns list of line segments (each segment is a list of points)
+        val lineSegments = mutableListOf<List<GeoPoint>>()
         val coordRegex = Regex("""\(\s*([^()]+)\s*\)""")
         coordRegex.findAll(wkt).forEach { match ->
             val innerCoords = match.groupValues[1]
             // Skip if it contains another parenthesis (nested structure)
             if (!innerCoords.contains("(")) {
-                points.addAll(parseCoordinateString(innerCoords))
+                val segment = parseCoordinateString(innerCoords)
+                if (segment.isNotEmpty()) {
+                    lineSegments.add(segment)
+                }
             }
         }
-        return points
+        return lineSegments
     }
 
     private fun parsePolygon(wkt: String): List<GeoPoint> {
@@ -239,5 +318,6 @@ class MapViewModel @Inject constructor(
 
     fun refresh() {
         loadProjects()
+        loadPhotoMarkers()
     }
 }
