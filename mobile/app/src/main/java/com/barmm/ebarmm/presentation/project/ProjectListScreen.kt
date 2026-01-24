@@ -65,18 +65,23 @@ fun ProjectListScreen(
                     val activeFilterCount = listOfNotNull(
                         uiState.selectedStatus,
                         uiState.selectedDeoId?.let { "deo" },
-                        uiState.selectedFundYear?.let { "year" }
+                        uiState.selectedFundYear?.let { "year" },
+                        uiState.selectedProvince,
+                        uiState.selectedFundSource,
+                        uiState.selectedMode,
+                        uiState.selectedScale
                     ).size
 
-                    if (activeFilterCount > 0) {
-                        Badge(
-                            modifier = Modifier.padding(end = 4.dp)
-                        ) {
-                            Text(activeFilterCount.toString())
+                    BadgedBox(
+                        badge = {
+                            if (activeFilterCount > 0) {
+                                Badge { Text(activeFilterCount.toString()) }
+                            }
                         }
-                    }
-                    IconButton(onClick = { viewModel.toggleFilterSheet() }) {
-                        Icon(Icons.Default.FilterList, contentDescription = "Filters")
+                    ) {
+                        IconButton(onClick = { viewModel.toggleFilterSheet() }) {
+                            Icon(Icons.Default.FilterList, contentDescription = "Filters")
+                        }
                     }
                     IconButton(onClick = { viewModel.refreshProjects() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
@@ -150,7 +155,11 @@ fun ProjectListScreen(
             }
 
             // Active filters display
-            if (uiState.selectedDeoId != null || uiState.selectedFundYear != null) {
+            val hasAdvancedFilters = uiState.selectedDeoId != null || uiState.selectedFundYear != null ||
+                uiState.selectedProvince != null || uiState.selectedFundSource != null ||
+                uiState.selectedMode != null || uiState.selectedScale != null
+
+            if (hasAdvancedFilters) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -165,11 +174,17 @@ fun ProjectListScreen(
                             onClick = { viewModel.setDeoFilter(null) },
                             label = { Text(deoName) },
                             trailingIcon = {
-                                Icon(
-                                    Icons.Default.Clear,
-                                    contentDescription = "Remove",
-                                    modifier = Modifier.size(16.dp)
-                                )
+                                Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(16.dp))
+                            }
+                        )
+                    }
+                    uiState.selectedProvince?.let { province ->
+                        InputChip(
+                            selected = true,
+                            onClick = { viewModel.setProvinceFilter(null) },
+                            label = { Text(province) },
+                            trailingIcon = {
+                                Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(16.dp))
                             }
                         )
                     }
@@ -179,11 +194,37 @@ fun ProjectListScreen(
                             onClick = { viewModel.setFundYearFilter(null) },
                             label = { Text("Year: $year") },
                             trailingIcon = {
-                                Icon(
-                                    Icons.Default.Clear,
-                                    contentDescription = "Remove",
-                                    modifier = Modifier.size(16.dp)
-                                )
+                                Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(16.dp))
+                            }
+                        )
+                    }
+                    uiState.selectedFundSource?.let { source ->
+                        InputChip(
+                            selected = true,
+                            onClick = { viewModel.setFundSourceFilter(null) },
+                            label = { Text(source) },
+                            trailingIcon = {
+                                Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(16.dp))
+                            }
+                        )
+                    }
+                    uiState.selectedMode?.let { mode ->
+                        InputChip(
+                            selected = true,
+                            onClick = { viewModel.setModeFilter(null) },
+                            label = { Text(mode) },
+                            trailingIcon = {
+                                Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(16.dp))
+                            }
+                        )
+                    }
+                    uiState.selectedScale?.let { scale ->
+                        InputChip(
+                            selected = true,
+                            onClick = { viewModel.setScaleFilter(null) },
+                            label = { Text(scale) },
+                            trailingIcon = {
+                                Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(16.dp))
                             }
                         )
                     }
@@ -243,12 +284,13 @@ fun ProjectListScreen(
         // Filter bottom sheet
         if (uiState.showFilterSheet) {
             FilterBottomSheet(
-                deos = uiState.deos,
-                fundYears = uiState.fundYears,
-                selectedDeoId = uiState.selectedDeoId,
-                selectedFundYear = uiState.selectedFundYear,
+                uiState = uiState,
                 onDeoSelect = { viewModel.setDeoFilter(it) },
+                onProvinceSelect = { viewModel.setProvinceFilter(it) },
                 onFundYearSelect = { viewModel.setFundYearFilter(it) },
+                onFundSourceSelect = { viewModel.setFundSourceFilter(it) },
+                onModeSelect = { viewModel.setModeFilter(it) },
+                onScaleSelect = { viewModel.setScaleFilter(it) },
                 onDismiss = { viewModel.hideFilterSheet() },
                 onClearAll = { viewModel.clearFilters() }
             )
@@ -259,117 +301,174 @@ fun ProjectListScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FilterBottomSheet(
-    deos: List<com.barmm.ebarmm.data.remote.dto.DeoOption>,
-    fundYears: List<Int>,
-    selectedDeoId: Int?,
-    selectedFundYear: Int?,
+    uiState: ProjectListUiState,
     onDeoSelect: (Int?) -> Unit,
+    onProvinceSelect: (String?) -> Unit,
     onFundYearSelect: (Int?) -> Unit,
+    onFundSourceSelect: (String?) -> Unit,
+    onModeSelect: (String?) -> Unit,
+    onScaleSelect: (String?) -> Unit,
     onDismiss: () -> Unit,
     onClearAll: () -> Unit
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss
     ) {
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Filters",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                TextButton(onClick = {
-                    onClearAll()
-                    onDismiss()
-                }) {
-                    Text("Clear All")
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Filters",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    TextButton(onClick = {
+                        onClearAll()
+                        onDismiss()
+                    }) {
+                        Text("Clear All")
+                    }
                 }
+                Spacer(modifier = Modifier.height(16.dp))
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
 
             // DEO Filter
-            Text(
-                text = "DEO (District Engineering Office)",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    selected = selectedDeoId == null,
-                    onClick = { onDeoSelect(null) },
-                    label = { Text("All") }
+            item {
+                FilterSection(
+                    title = "DEO",
+                    options = uiState.deos.map { "${it.deoName} (${it.projectCount})" },
+                    selectedIndex = uiState.deos.indexOfFirst { it.deoId == uiState.selectedDeoId },
+                    onSelect = { index ->
+                        onDeoSelect(if (index < 0) null else uiState.deos[index].deoId)
+                    }
                 )
-                deos.forEach { deo ->
-                    FilterChip(
-                        selected = selectedDeoId == deo.deoId,
-                        onClick = {
-                            onDeoSelect(if (selectedDeoId == deo.deoId) null else deo.deoId)
-                        },
-                        label = { Text("${deo.deoName} (${deo.projectCount})") }
+            }
+
+            // Province Filter
+            if (uiState.provinces.isNotEmpty()) {
+                item {
+                    FilterSection(
+                        title = "Province",
+                        options = uiState.provinces,
+                        selectedIndex = uiState.provinces.indexOf(uiState.selectedProvince),
+                        onSelect = { index ->
+                            onProvinceSelect(if (index < 0) null else uiState.provinces[index])
+                        }
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
 
             // Fund Year Filter
-            Text(
-                text = "Fund Year",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    selected = selectedFundYear == null,
-                    onClick = { onFundYearSelect(null) },
-                    label = { Text("All") }
-                )
-                fundYears.forEach { year ->
-                    FilterChip(
-                        selected = selectedFundYear == year,
-                        onClick = {
-                            onFundYearSelect(if (selectedFundYear == year) null else year)
-                        },
-                        label = { Text(year.toString()) }
+            if (uiState.fundYears.isNotEmpty()) {
+                item {
+                    FilterSection(
+                        title = "Fund Year",
+                        options = uiState.fundYears.map { it.toString() },
+                        selectedIndex = uiState.fundYears.indexOf(uiState.selectedFundYear),
+                        onSelect = { index ->
+                            onFundYearSelect(if (index < 0) null else uiState.fundYears[index])
+                        }
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Apply Filters")
+            // Fund Source Filter
+            if (uiState.fundSources.isNotEmpty()) {
+                item {
+                    FilterSection(
+                        title = "Fund Source",
+                        options = uiState.fundSources,
+                        selectedIndex = uiState.fundSources.indexOf(uiState.selectedFundSource),
+                        onSelect = { index ->
+                            onFundSourceSelect(if (index < 0) null else uiState.fundSources[index])
+                        }
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            // Mode of Implementation Filter
+            if (uiState.modes.isNotEmpty()) {
+                item {
+                    FilterSection(
+                        title = "Mode of Implementation",
+                        options = uiState.modes,
+                        selectedIndex = uiState.modes.indexOf(uiState.selectedMode),
+                        onSelect = { index ->
+                            onModeSelect(if (index < 0) null else uiState.modes[index])
+                        }
+                    )
+                }
+            }
+
+            // Project Scale Filter
+            if (uiState.scales.isNotEmpty()) {
+                item {
+                    FilterSection(
+                        title = "Project Scale",
+                        options = uiState.scales,
+                        selectedIndex = uiState.scales.indexOf(uiState.selectedScale),
+                        onSelect = { index ->
+                            onScaleSelect(if (index < 0) null else uiState.scales[index])
+                        }
+                    )
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Apply Filters")
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+            }
         }
     }
+}
+
+@Composable
+private fun FilterSection(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Medium
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = selectedIndex < 0,
+            onClick = { onSelect(-1) },
+            label = { Text("All") }
+        )
+        options.forEachIndexed { index, option ->
+            FilterChip(
+                selected = selectedIndex == index,
+                onClick = { onSelect(if (selectedIndex == index) -1 else index) },
+                label = { Text(option) }
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(16.dp))
 }
 
 @Composable

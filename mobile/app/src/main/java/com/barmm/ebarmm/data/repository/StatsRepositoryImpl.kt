@@ -45,14 +45,22 @@ class StatsRepositoryImpl @Inject constructor(
         search: String?,
         status: String?,
         deoId: Int?,
-        fundYear: Int?
+        fundYear: Int?,
+        province: String?,
+        fundSource: String?,
+        modeOfImplementation: String?,
+        projectScale: String?
     ): Result<List<PublicProjectResponse>> = withContext(Dispatchers.IO) {
         try {
             val response = publicApi.getPublicProjects(
                 search = search?.takeIf { it.isNotBlank() },
                 status = status,
                 deoId = deoId,
-                fundYear = fundYear
+                fundYear = fundYear,
+                province = province,
+                fundSource = fundSource,
+                modeOfImplementation = modeOfImplementation,
+                projectScale = projectScale
             )
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!.items)

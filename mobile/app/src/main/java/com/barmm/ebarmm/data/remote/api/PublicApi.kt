@@ -18,7 +18,11 @@ interface PublicApi {
         @Query("search") search: String? = null,
         @Query("status") status: String? = null,
         @Query("deo_id") deoId: Int? = null,
-        @Query("fund_year") fundYear: Int? = null
+        @Query("fund_year") fundYear: Int? = null,
+        @Query("province") province: String? = null,
+        @Query("fund_source") fundSource: String? = null,
+        @Query("mode_of_implementation") modeOfImplementation: String? = null,
+        @Query("project_scale") projectScale: String? = null
     ): Response<PublicProjectsResponse>
 
     @GET("/api/v1/public/filter-options")

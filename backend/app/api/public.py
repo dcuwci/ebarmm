@@ -24,6 +24,10 @@ async def get_public_projects(
     fund_year: Optional[int] = None,
     status: Optional[str] = Query(None, regex=r'^(planning|ongoing|completed|suspended)$'),
     search: Optional[str] = None,
+    province: Optional[str] = None,
+    fund_source: Optional[str] = None,
+    mode_of_implementation: Optional[str] = None,
+    project_scale: Optional[str] = None,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db)
@@ -39,6 +43,10 @@ async def get_public_projects(
     - fund_year: Filter by funding year
     - status: Filter by status (excludes 'deleted')
     - search: Text search in project title or location
+    - province: Filter by province (via DEO)
+    - fund_source: Filter by fund source
+    - mode_of_implementation: Filter by mode of implementation
+    - project_scale: Filter by project scale
     - limit: Max results (default 50, max 200)
     - offset: Pagination offset
     """
@@ -65,6 +73,18 @@ async def get_public_projects(
             (Project.project_title.ilike(search_term)) |
             (Project.location.ilike(search_term))
         )
+
+    if province:
+        query = query.filter(DEO.province == province)
+
+    if fund_source:
+        query = query.filter(Project.fund_source == fund_source)
+
+    if mode_of_implementation:
+        query = query.filter(Project.mode_of_implementation == mode_of_implementation)
+
+    if project_scale:
+        query = query.filter(Project.project_scale == project_scale)
 
     # Get total count (simpler query without complex subquery)
     total = query.count()

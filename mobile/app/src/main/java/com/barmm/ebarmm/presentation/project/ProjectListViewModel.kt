@@ -28,10 +28,18 @@ data class ProjectListUiState(
     val selectedStatus: String? = null,
     val selectedDeoId: Int? = null,
     val selectedFundYear: Int? = null,
+    val selectedProvince: String? = null,
+    val selectedFundSource: String? = null,
+    val selectedMode: String? = null,
+    val selectedScale: String? = null,
     // Filter options
     val statuses: List<String> = listOf("planning", "ongoing", "completed", "suspended"),
     val deos: List<DeoOption> = emptyList(),
     val fundYears: List<Int> = emptyList(),
+    val provinces: List<String> = emptyList(),
+    val fundSources: List<String> = emptyList(),
+    val modes: List<String> = emptyList(),
+    val scales: List<String> = emptyList(),
     val showFilterSheet: Boolean = false
 )
 
@@ -77,7 +85,11 @@ class ProjectListViewModel @Inject constructor(
                         it.copy(
                             deos = options.deos,
                             fundYears = options.fundYears,
-                            statuses = options.statuses
+                            statuses = options.statuses,
+                            provinces = options.provinces,
+                            fundSources = options.fundSources,
+                            modes = options.modesOfImplementation,
+                            scales = options.projectScales
                         )
                     }
                 },
@@ -95,7 +107,11 @@ class ProjectListViewModel @Inject constructor(
                 search = state.searchQuery.takeIf { it.isNotBlank() },
                 status = state.selectedStatus,
                 deoId = state.selectedDeoId,
-                fundYear = state.selectedFundYear
+                fundYear = state.selectedFundYear,
+                province = state.selectedProvince,
+                fundSource = state.selectedFundSource,
+                modeOfImplementation = state.selectedMode,
+                projectScale = state.selectedScale
             ).fold(
                 onSuccess = { projects ->
                     _uiState.update { it.copy(isLoading = false, projects = projects) }
@@ -129,13 +145,37 @@ class ProjectListViewModel @Inject constructor(
         refreshProjects()
     }
 
+    fun setProvinceFilter(province: String?) {
+        _uiState.update { it.copy(selectedProvince = province) }
+        refreshProjects()
+    }
+
+    fun setFundSourceFilter(source: String?) {
+        _uiState.update { it.copy(selectedFundSource = source) }
+        refreshProjects()
+    }
+
+    fun setModeFilter(mode: String?) {
+        _uiState.update { it.copy(selectedMode = mode) }
+        refreshProjects()
+    }
+
+    fun setScaleFilter(scale: String?) {
+        _uiState.update { it.copy(selectedScale = scale) }
+        refreshProjects()
+    }
+
     fun clearFilters() {
         _uiState.update {
             it.copy(
                 searchQuery = "",
                 selectedStatus = null,
                 selectedDeoId = null,
-                selectedFundYear = null
+                selectedFundYear = null,
+                selectedProvince = null,
+                selectedFundSource = null,
+                selectedMode = null,
+                selectedScale = null
             )
         }
         refreshProjects()
@@ -151,6 +191,8 @@ class ProjectListViewModel @Inject constructor(
 
     val hasActiveFilters: Boolean
         get() = with(_uiState.value) {
-            searchQuery.isNotBlank() || selectedStatus != null || selectedDeoId != null || selectedFundYear != null
+            searchQuery.isNotBlank() || selectedStatus != null || selectedDeoId != null ||
+            selectedFundYear != null || selectedProvince != null || selectedFundSource != null ||
+            selectedMode != null || selectedScale != null
         }
 }

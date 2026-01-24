@@ -11,7 +11,11 @@ interface StatsRepository {
         search: String? = null,
         status: String? = null,
         deoId: Int? = null,
-        fundYear: Int? = null
+        fundYear: Int? = null,
+        province: String? = null,
+        fundSource: String? = null,
+        modeOfImplementation: String? = null,
+        projectScale: String? = null
     ): Result<List<PublicProjectResponse>>
     suspend fun getFilterOptions(): Result<FilterOptionsResponse>
 }
