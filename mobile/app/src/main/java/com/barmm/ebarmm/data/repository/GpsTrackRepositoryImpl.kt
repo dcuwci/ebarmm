@@ -20,24 +20,26 @@ class GpsTrackRepositoryImpl @Inject constructor(
 ) : GpsTrackRepository {
 
     override fun getTracksByProject(projectId: String): Flow<List<GpsTrackEntity>> {
-        return gpsTrackDao.getByProjectId(projectId)
+        return gpsTrackDao.getTracksByProject(projectId)
     }
 
     override suspend fun getTrackById(trackId: String): GpsTrackEntity? {
-        return gpsTrackDao.getById(trackId)
+        return gpsTrackDao.getTrack(trackId)
     }
 
     override suspend fun getTrackByMediaId(mediaLocalId: String): GpsTrackEntity? {
-        return gpsTrackDao.getByMediaLocalId(mediaLocalId)
+        return gpsTrackDao.getTrackByMedia(mediaLocalId)
     }
 
     override fun getPendingTracks(): Flow<List<GpsTrackEntity>> {
-        return gpsTrackDao.getPendingSync()
+        return kotlinx.coroutines.flow.flow {
+            emit(gpsTrackDao.getPendingTracks())
+        }
     }
 
     override suspend fun saveTrack(track: GpsTrackEntity): Result<Unit> {
         return try {
-            gpsTrackDao.insert(track)
+            gpsTrackDao.insertTrack(track)
             Timber.d("Saved GPS track: ${track.trackId}")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -60,7 +62,7 @@ class GpsTrackRepositoryImpl @Inject constructor(
                 legacyRouteshootId = legacyRouteshootId
             ) ?: return Result.failure(IllegalArgumentException("Failed to parse KML file"))
 
-            gpsTrackDao.insert(track)
+            gpsTrackDao.insertTrack(track)
             Timber.d("Imported legacy KML: ${track.trackId}, ${track.waypointCount} waypoints")
             Result.success(track)
         } catch (e: Exception) {
@@ -71,14 +73,14 @@ class GpsTrackRepositoryImpl @Inject constructor(
 
     override suspend fun exportToGpx(trackId: String): Result<File> {
         return try {
-            val track = gpsTrackDao.getById(trackId)
+            val track = gpsTrackDao.getTrack(trackId)
                 ?: return Result.failure(IllegalArgumentException("Track not found: $trackId"))
 
             val gpxPath = gpxKmlGenerator.generateGpx(track)
                 ?: return Result.failure(IllegalStateException("Failed to generate GPX"))
 
             // Update track with GPX path
-            gpsTrackDao.update(track.copy(gpxFilePath = gpxPath))
+            gpsTrackDao.updateTrack(track.copy(gpxFilePath = gpxPath))
 
             Timber.d("Exported GPX: $gpxPath")
             Result.success(File(gpxPath))
@@ -90,14 +92,14 @@ class GpsTrackRepositoryImpl @Inject constructor(
 
     override suspend fun exportToKml(trackId: String): Result<File> {
         return try {
-            val track = gpsTrackDao.getById(trackId)
+            val track = gpsTrackDao.getTrack(trackId)
                 ?: return Result.failure(IllegalArgumentException("Track not found: $trackId"))
 
             val kmlPath = gpxKmlGenerator.generateKml(track)
                 ?: return Result.failure(IllegalStateException("Failed to generate KML"))
 
             // Update track with KML path
-            gpsTrackDao.update(track.copy(kmlFilePath = kmlPath))
+            gpsTrackDao.updateTrack(track.copy(kmlFilePath = kmlPath))
 
             Timber.d("Exported KML: $kmlPath")
             Result.success(File(kmlPath))
@@ -108,22 +110,20 @@ class GpsTrackRepositoryImpl @Inject constructor(
     }
 
     override suspend fun markAsSynced(trackId: String, serverId: String) {
-        gpsTrackDao.updateSyncStatus(
+        gpsTrackDao.markSynced(
             trackId = trackId,
-            syncStatus = SyncStatus.SYNCED,
-            serverId = serverId,
-            syncedAt = System.currentTimeMillis()
+            serverId = serverId
         )
         Timber.d("Track marked as synced: $trackId -> $serverId")
     }
 
     override suspend fun markSyncFailed(trackId: String, error: String) {
-        gpsTrackDao.updateSyncError(trackId, error)
+        gpsTrackDao.updateSyncStatus(trackId, SyncStatus.FAILED, error)
         Timber.w("Track sync failed: $trackId - $error")
     }
 
     override suspend fun deleteTrack(trackId: String) {
-        gpsTrackDao.deleteById(trackId)
+        gpsTrackDao.deleteTrack(trackId)
         Timber.d("Deleted GPS track: $trackId")
     }
 }

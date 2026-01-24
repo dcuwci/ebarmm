@@ -34,7 +34,7 @@ class GpsTrackSyncWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         return try {
-            val pendingTracks = gpsTrackDao.getPendingSyncList()
+            val pendingTracks = gpsTrackDao.getPendingTracks()
 
             if (pendingTracks.isEmpty()) {
                 Timber.d("No pending GPS tracks to sync")
@@ -96,16 +96,14 @@ class GpsTrackSyncWorker @AssistedInject constructor(
             // Step 5: Update track as synced
             // Note: In a full implementation, we would register the track with the backend API
             // For now, we just mark it as synced with the presigned URL key as the server ID
-            gpsTrackDao.updateSyncStatus(
+            gpsTrackDao.markSynced(
                 trackId = track.trackId,
-                syncStatus = SyncStatus.SYNCED,
-                serverId = presignedUrl.mediaKey,
-                syncedAt = System.currentTimeMillis()
+                serverId = presignedUrl.mediaKey
             )
 
             // Update the KML file path if it was just generated
             if (track.kmlFilePath == null) {
-                gpsTrackDao.update(track.copy(kmlFilePath = kmlPath))
+                gpsTrackDao.updateTrack(track.copy(kmlFilePath = kmlPath))
             }
 
             Timber.i("GPS track synced successfully: ${track.trackId}, ${track.waypointCount} waypoints")
@@ -113,7 +111,7 @@ class GpsTrackSyncWorker @AssistedInject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Failed to sync GPS track: ${track.trackId}")
 
-            gpsTrackDao.updateSyncError(track.trackId, e.message ?: "Unknown error")
+            gpsTrackDao.updateSyncStatus(track.trackId, SyncStatus.FAILED, e.message ?: "Unknown error")
         }
     }
 

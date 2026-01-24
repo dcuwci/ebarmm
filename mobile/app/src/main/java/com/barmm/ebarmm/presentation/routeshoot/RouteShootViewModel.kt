@@ -226,7 +226,7 @@ class RouteShootViewModel @Inject constructor(
 
                 // Save to database
                 mediaDao.insert(mediaEntity)
-                gpsTrackDao.insert(gpsTrackEntity)
+                gpsTrackDao.insertTrack(gpsTrackEntity)
 
                 _uiState.update { it.copy(isSaving = false, saveSuccess = true) }
                 Timber.d("Saved RouteShoot recording: media=$mediaLocalId, track=${trackResult.trackId}")
