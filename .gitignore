@@ -38,6 +38,7 @@ logs/
 # Testing
 .coverage
 htmlcov/
+coverage/
 .pytest_cache/
 .tox/
 
