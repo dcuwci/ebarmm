@@ -436,6 +436,7 @@ private fun FilterBottomSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FilterSection(
     title: String,
