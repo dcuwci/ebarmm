@@ -19,6 +19,7 @@ import { Download, Eye } from 'lucide-react';
 import { Button, Table, LoadingSpinner, DashboardFilter } from '../../components/mui';
 import type { Column } from '../../components/mui';
 import { apiClient } from '../../api/client';
+import { useFilterStore } from '../../stores/filterStore';
 import { fetchAllPublicProjects } from '../../api/public';
 import { exportToCSV } from '../../utils/export';
 import type { PublicProject } from '../../types/project';
@@ -76,15 +77,25 @@ export default function PublicProjects() {
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [isExporting, setIsExporting] = useState(false);
 
-  // Filter state
-  const [search, setSearch] = useState('');
-  const [selectedDEOs, setSelectedDEOs] = useState<number[]>([]);
-  const [selectedProvinces, setSelectedProvinces] = useState<string[]>([]);
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [selectedFundYears, setSelectedFundYears] = useState<number[]>([]);
-  const [selectedFundSources, setSelectedFundSources] = useState<string[]>([]);
-  const [selectedModes, setSelectedModes] = useState<string[]>([]);
-  const [selectedScales, setSelectedScales] = useState<string[]>([]);
+  // Filter state - persisted globally via Zustand store (shared with Dashboard)
+  const {
+    search,
+    selectedDEOs,
+    selectedProvinces,
+    selectedStatuses,
+    selectedFundYears,
+    selectedFundSources,
+    selectedModes,
+    selectedScales,
+    setSearch,
+    setSelectedDEOs,
+    setSelectedProvinces,
+    setSelectedStatuses,
+    setSelectedFundYears,
+    setSelectedFundSources,
+    setSelectedModes,
+    setSelectedScales,
+  } = useFilterStore();
 
   // Fetch filter options
   const { data: filterOptions, isLoading: filterOptionsLoading } = useQuery({

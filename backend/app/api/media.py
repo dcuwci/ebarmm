@@ -191,13 +191,7 @@ async def get_geotagged_media(
     if project_id:
         query = query.filter(MediaAsset.project_id == project_id)
 
-    # RBAC filtering
-    if current_user.role == "deo_user":
-        # DEO users can only see photos from their DEO's projects
-        deo_project_ids = db.query(Project.project_id).filter(
-            Project.deo_id == current_user.deo_id
-        ).subquery()
-        query = query.filter(MediaAsset.project_id.in_(deo_project_ids))
+    # Note: DEO users can VIEW geotagged media from any project for transparency
 
     media_assets = query.order_by(MediaAsset.uploaded_at.desc()).limit(limit).all()
 
@@ -428,12 +422,8 @@ async def get_project_media(
             detail="Project not found"
         )
 
-    # RBAC check
-    if current_user.role == "deo_user" and project.deo_id != current_user.deo_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to this project"
-        )
+    # Note: DEO users can VIEW media from any project for transparency
+    # Edit/delete restrictions are enforced in other endpoints
 
     # Query media assets
     query = db.query(MediaAsset).filter(MediaAsset.project_id == project_id)

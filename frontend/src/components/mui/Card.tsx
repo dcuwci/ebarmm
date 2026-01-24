@@ -3,6 +3,7 @@ import MuiCard from '@mui/material/Card';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Skeleton from '@mui/material/Skeleton';
+import type { SxProps, Theme } from '@mui/material/styles';
 
 interface CardProps {
   children: React.ReactNode;
@@ -10,6 +11,8 @@ interface CardProps {
   padding?: 'none' | 'sm' | 'md' | 'lg';
   hover?: boolean;
   elevation?: number;
+  onClick?: () => void;
+  sx?: SxProps<Theme>;
 }
 
 const paddingMap = {
@@ -24,10 +27,13 @@ export const Card: React.FC<CardProps> = ({
   padding = 'md',
   hover = false,
   elevation = 1,
+  onClick,
+  sx,
 }) => {
   return (
     <MuiCard
       elevation={elevation}
+      onClick={onClick}
       sx={{
         borderRadius: 2,
         p: paddingMap[padding],
@@ -39,6 +45,7 @@ export const Card: React.FC<CardProps> = ({
             transform: 'translateY(-2px)',
           },
         }),
+        ...sx,
       }}
     >
       {children}
@@ -91,6 +98,7 @@ interface StatCardProps {
     isPositive: boolean;
   };
   loading?: boolean;
+  onClick?: () => void;
 }
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -100,6 +108,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   color = '#1976d2',
   trend,
   loading = false,
+  onClick,
 }) => {
   if (loading) {
     return (
@@ -116,7 +125,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   }
 
   return (
-    <Card hover>
+    <Card hover onClick={onClick} sx={onClick ? { cursor: 'pointer' } : undefined}>
       <Box
         sx={{
           display: 'flex',

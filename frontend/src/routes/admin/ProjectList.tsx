@@ -23,6 +23,8 @@ import {
 import { Button, Table, LoadingSpinner, DashboardFilter } from '../../components/mui'
 import type { Column } from '../../components/mui'
 import { apiClient } from '../../api/client'
+import { useAuthStore } from '../../stores/authStore'
+import { useFilterStore } from '../../stores/filterStore'
 import type { Project, ProjectStatus } from '../../types/project'
 import { format } from 'date-fns'
 
@@ -57,18 +59,29 @@ const getStatusColor = (status: ProjectStatus): 'default' | 'primary' | 'success
 
 export default function ProjectList() {
   const navigate = useNavigate()
+  const user = useAuthStore((state) => state.user)
   const [currentPage, setCurrentPage] = useState(0)
   const [itemsPerPage, setItemsPerPage] = useState(25)
 
-  // Filter state (same as Dashboard)
-  const [search, setSearch] = useState('')
-  const [selectedDEOs, setSelectedDEOs] = useState<number[]>([])
-  const [selectedProvinces, setSelectedProvinces] = useState<string[]>([])
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([])
-  const [selectedFundYears, setSelectedFundYears] = useState<number[]>([])
-  const [selectedFundSources, setSelectedFundSources] = useState<string[]>([])
-  const [selectedModes, setSelectedModes] = useState<string[]>([])
-  const [selectedScales, setSelectedScales] = useState<string[]>([])
+  // Filter state - persisted globally via Zustand store (shared with Dashboard)
+  const {
+    search,
+    selectedDEOs,
+    selectedProvinces,
+    selectedStatuses,
+    selectedFundYears,
+    selectedFundSources,
+    selectedModes,
+    selectedScales,
+    setSearch,
+    setSelectedDEOs,
+    setSelectedProvinces,
+    setSelectedStatuses,
+    setSelectedFundYears,
+    setSelectedFundSources,
+    setSelectedModes,
+    setSelectedScales,
+  } = useFilterStore()
 
   // Fetch filter options
   const { data: filterOptions, isLoading: filterOptionsLoading } = useQuery({
@@ -326,32 +339,41 @@ export default function ProjectList() {
       header: 'Actions',
       align: 'right',
       minWidth: 80,
-      render: (row) => (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
-          <Tooltip title="View details">
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation()
-                navigate(`/admin/projects/${row.project_id}`)
-              }}
-            >
-              <Eye size={18} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Edit project">
-            <IconButton
-              size="small"
-              onClick={(e) => {
-                e.stopPropagation()
-                navigate(`/admin/projects/${row.project_id}/edit`)
-              }}
-            >
-              <Edit size={18} />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      ),
+      render: (row) => {
+        // DEO users can only edit projects in their own DEO
+        const canEdit = user?.role === 'super_admin' ||
+                        user?.role === 'regional_admin' ||
+                        (user?.role === 'deo_user' && row.deo_id === user?.deo_id)
+
+        return (
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+            <Tooltip title="View details">
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigate(`/admin/projects/${row.project_id}`)
+                }}
+              >
+                <Eye size={18} />
+              </IconButton>
+            </Tooltip>
+            {canEdit && (
+              <Tooltip title="Edit project">
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigate(`/admin/projects/${row.project_id}/edit`)
+                  }}
+                >
+                  <Edit size={18} />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+        )
+      },
     },
   ]
 

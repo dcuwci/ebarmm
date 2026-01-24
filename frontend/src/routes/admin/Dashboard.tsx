@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
@@ -6,9 +6,23 @@ import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
 import Chip from '@mui/material/Chip';
 import LinearProgress from '@mui/material/LinearProgress';
-import { Building2, Zap, CheckCircle, DollarSign, Plus, ClipboardList, Map, TrendingUp } from 'lucide-react';
+import { useTheme } from '@mui/material/styles';
+import { Building2, Zap, CheckCircle, DollarSign, Plus, ClipboardList, Map, TrendingUp, Clock, PauseCircle } from 'lucide-react';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 import { StatCard, Card, CardHeader, LoadingSpinner, Table, Button, DashboardFilter } from '../../components/mui';
 import { useAuthStore } from '../../stores/authStore';
+import { useFilterStore } from '../../stores/filterStore';
 import { apiClient } from '../../api/client';
 import type { Column } from '../../components/mui';
 
@@ -29,15 +43,6 @@ interface FilterOptions {
   project_scales: string[];
 }
 
-interface DashboardStats {
-  total_projects: number;
-  ongoing_projects: number;
-  completed_projects: number;
-  total_investment: number;
-  my_deo_projects?: number;
-  avg_progress: number;
-}
-
 interface Project {
   project_id: string;
   project_title: string;
@@ -53,19 +58,37 @@ interface Project {
   fund_year?: number;
 }
 
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  planning: { label: 'Planning', color: '#9e9e9e', icon: <Clock size={16} /> },
+  ongoing: { label: 'Ongoing', color: '#ed6c02', icon: <Zap size={16} /> },
+  completed: { label: 'Completed', color: '#2e7d32', icon: <CheckCircle size={16} /> },
+  suspended: { label: 'Suspended', color: '#d32f2f', icon: <PauseCircle size={16} /> },
+};
+
 export default function Dashboard() {
   const navigate = useNavigate();
+  const theme = useTheme();
   const user = useAuthStore((state) => state.user);
 
-  // Filter state
-  const [search, setSearch] = useState('');
-  const [selectedDEOs, setSelectedDEOs] = useState<number[]>([]);
-  const [selectedProvinces, setSelectedProvinces] = useState<string[]>([]);
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [selectedFundYears, setSelectedFundYears] = useState<number[]>([]);
-  const [selectedFundSources, setSelectedFundSources] = useState<string[]>([]);
-  const [selectedModes, setSelectedModes] = useState<string[]>([]);
-  const [selectedScales, setSelectedScales] = useState<string[]>([]);
+  // Filter state - persisted globally via Zustand store
+  const {
+    search,
+    selectedDEOs,
+    selectedProvinces,
+    selectedStatuses,
+    selectedFundYears,
+    selectedFundSources,
+    selectedModes,
+    selectedScales,
+    setSearch,
+    setSelectedDEOs,
+    setSelectedProvinces,
+    setSelectedStatuses,
+    setSelectedFundYears,
+    setSelectedFundSources,
+    setSelectedModes,
+    setSelectedScales,
+  } = useFilterStore();
 
   // Fetch filter options
   const { data: filterOptions, isLoading: filterOptionsLoading } = useQuery({
@@ -157,12 +180,14 @@ export default function Dashboard() {
   }, [projectsData, selectedDEOs, selectedStatuses, selectedFundYears, selectedProvinces, selectedFundSources, selectedModes, selectedScales, filterOptions]);
 
   // Calculate statistics from filtered projects
-  const stats = useMemo((): DashboardStats | null => {
+  const stats = useMemo(() => {
     if (filteredProjects.length === 0 && projectsLoading) return null;
 
     const total = filteredProjects.length;
+    const planning = filteredProjects.filter((p) => p.status === 'planning').length;
     const ongoing = filteredProjects.filter((p) => p.status === 'ongoing').length;
     const completed = filteredProjects.filter((p) => p.status === 'completed').length;
+    const suspended = filteredProjects.filter((p) => p.status === 'suspended').length;
     const totalCost = filteredProjects.reduce((sum, p) => sum + (p.project_cost || 0), 0);
     const avgProgress = total > 0
       ? filteredProjects.reduce((sum, p) => sum + (p.current_progress || 0), 0) / total
@@ -174,13 +199,48 @@ export default function Dashboard() {
 
     return {
       total_projects: total,
+      planning_projects: planning,
       ongoing_projects: ongoing,
       completed_projects: completed,
+      suspended_projects: suspended,
       total_investment: totalCost,
       my_deo_projects: myDeoProjects,
       avg_progress: avgProgress,
     };
   }, [filteredProjects, user, projectsLoading]);
+
+  // Status distribution chart data
+  const statusChartData = useMemo(() => {
+    if (!stats) return [];
+    return [
+      { name: 'Planning', value: stats.planning_projects, color: STATUS_CONFIG.planning.color },
+      { name: 'Ongoing', value: stats.ongoing_projects, color: STATUS_CONFIG.ongoing.color },
+      { name: 'Completed', value: stats.completed_projects, color: STATUS_CONFIG.completed.color },
+      { name: 'Suspended', value: stats.suspended_projects, color: STATUS_CONFIG.suspended.color },
+    ].filter((d) => d.value > 0);
+  }, [stats]);
+
+  // Projects by province chart data
+  const provinceChartData = useMemo(() => {
+    if (!filteredProjects.length || !filterOptions) return [];
+
+    const provinceMap: Record<string, { count: number; investment: number }> = {};
+
+    filteredProjects.forEach((project) => {
+      const deo = filterOptions.deos.find((d) => d.deo_id === project.deo_id);
+      const province = deo?.province || 'Unknown';
+      const existing = provinceMap[province] || { count: 0, investment: 0 };
+      provinceMap[province] = {
+        count: existing.count + 1,
+        investment: existing.investment + (project.project_cost || 0),
+      };
+    });
+
+    return Object.entries(provinceMap)
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6); // Top 6 provinces
+  }, [filteredProjects, filterOptions]);
 
   // Get recent projects (top 5)
   const recentProjects = useMemo(() => {
@@ -268,6 +328,29 @@ export default function Dashboard() {
     refetchProjects();
   };
 
+  // Navigate to projects with status filter
+  const navigateWithStatus = (status?: string) => {
+    if (status) {
+      navigate(`/admin/projects?status=${status}`);
+    } else {
+      navigate('/admin/projects');
+    }
+  };
+
+  // Custom tooltip for pie chart
+  const PieTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) => {
+    if (active && payload && payload.length) {
+      return (
+        <Box sx={{ bgcolor: 'background.paper', p: 1, borderRadius: 1, boxShadow: 2 }}>
+          <Typography variant="body2" fontWeight={500}>
+            {payload[0].name}: {payload[0].value}
+          </Typography>
+        </Box>
+      );
+    }
+    return null;
+  };
+
   return (
     <Box sx={{ maxWidth: 1400, mx: 'auto', px: { xs: 2, sm: 3 }, py: { xs: 2, sm: 3 } }}>
       {/* Welcome Header */}
@@ -301,7 +384,7 @@ export default function Dashboard() {
         loading={projectsLoading}
       />
 
-      {/* Statistics Cards */}
+      {/* Statistics Cards - Clickable */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {projectsLoading && !stats ? (
           Array.from({ length: 5 }).map((_, i) => (
@@ -313,10 +396,11 @@ export default function Dashboard() {
           <>
             <Grid item xs={12} sm={6} md={4} lg={2.4}>
               <StatCard
-                title={user?.role === 'deo_user' ? 'My DEO Projects' : 'Total Projects'}
-                value={user?.role === 'deo_user' ? (stats.my_deo_projects || 0) : stats.total_projects}
+                title="Total Projects"
+                value={stats.total_projects}
                 icon={<Building2 size={24} />}
                 color="#1976d2"
+                onClick={() => navigateWithStatus()}
               />
             </Grid>
             <Grid item xs={12} sm={6} md={4} lg={2.4}>
@@ -325,6 +409,7 @@ export default function Dashboard() {
                 value={stats.ongoing_projects}
                 icon={<Zap size={24} />}
                 color="#ed6c02"
+                onClick={() => navigateWithStatus('ongoing')}
               />
             </Grid>
             <Grid item xs={12} sm={6} md={4} lg={2.4}>
@@ -333,6 +418,7 @@ export default function Dashboard() {
                 value={stats.completed_projects}
                 icon={<CheckCircle size={24} />}
                 color="#2e7d32"
+                onClick={() => navigateWithStatus('completed')}
               />
             </Grid>
             <Grid item xs={12} sm={6} md={4} lg={2.4}>
@@ -353,6 +439,88 @@ export default function Dashboard() {
             </Grid>
           </>
         ) : null}
+      </Grid>
+
+      {/* Charts Row */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {/* Status Distribution */}
+        <Grid item xs={12} md={5}>
+          <Card>
+            <CardHeader title="Status Distribution" />
+            {statusChartData.length > 0 ? (
+              <Box sx={{ height: 250, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusChartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {statusChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<PieTooltip />} />
+                    <Legend
+                      verticalAlign="middle"
+                      align="right"
+                      layout="vertical"
+                      formatter={(value) => <span style={{ color: theme.palette.text.primary }}>{value}</span>}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Box>
+            ) : (
+              <Box sx={{ height: 250, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography color="text.secondary">No data available</Typography>
+              </Box>
+            )}
+          </Card>
+        </Grid>
+
+        {/* Projects by Province */}
+        <Grid item xs={12} md={7}>
+          <Card>
+            <CardHeader title="Projects by Province" />
+            {provinceChartData.length > 0 ? (
+              <Box sx={{ height: 250 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={provinceChartData} layout="vertical" margin={{ left: 20, right: 20 }}>
+                    <XAxis type="number" stroke={theme.palette.text.secondary} fontSize={12} />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      width={100}
+                      stroke={theme.palette.text.secondary}
+                      fontSize={12}
+                      tickFormatter={(value) => value.length > 15 ? `${value.slice(0, 15)}...` : value}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: theme.palette.background.paper,
+                        border: `1px solid ${theme.palette.divider}`,
+                        borderRadius: 8,
+                      }}
+                      formatter={(value: number, name: string) => [
+                        name === 'count' ? `${value} projects` : formatCurrency(value),
+                        name === 'count' ? 'Projects' : 'Investment',
+                      ]}
+                    />
+                    <Bar dataKey="count" fill={theme.palette.primary.main} radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            ) : (
+              <Box sx={{ height: 250, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography color="text.secondary">No data available</Typography>
+              </Box>
+            )}
+          </Card>
+        </Grid>
       </Grid>
 
       {/* Quick Actions */}

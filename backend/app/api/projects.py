@@ -53,10 +53,9 @@ async def list_projects(
 
     # RBAC filtering is handled by Row Level Security (RLS)
     # But we add additional filters here for convenience
+    # Note: DEO users can view ALL projects for transparency, but can only EDIT their own DEO's projects
 
-    if current_user.role == "deo_user":
-        query = query.filter(Project.deo_id == current_user.deo_id)
-    elif current_user.role == "regional_admin":
+    if current_user.role == "regional_admin":
         query = query.filter(DEO.region == current_user.region)
     elif current_user.role == "public":
         query = query.filter(Project.status.not_in(['deleted', 'cancelled']))
@@ -144,12 +143,8 @@ async def get_project(
             detail="Project not found"
         )
 
-    # RBAC check (in addition to RLS)
-    if current_user.role == "deo_user" and project.deo_id != current_user.deo_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to this project"
-        )
+    # Note: DEO users can VIEW any project for transparency
+    # Edit restrictions are enforced in the update endpoint
 
     # Get current progress
     latest_progress = db.query(ProjectProgressLog).filter(

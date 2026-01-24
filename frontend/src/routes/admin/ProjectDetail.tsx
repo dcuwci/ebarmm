@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { Button, LoadingSpinner } from '../../components/mui';
 import { fetchProject } from '../../api/projects';
+import { useAuthStore } from '../../stores/authStore';
 import { format } from 'date-fns';
 
 // Import feature components
@@ -70,6 +71,7 @@ const STATUS_COLORS: Record<string, 'default' | 'primary' | 'success' | 'warning
 export default function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const user = useAuthStore((state) => state.user);
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [showUpload, setShowUpload] = useState(false);
 
@@ -79,6 +81,11 @@ export default function ProjectDetail() {
     queryFn: () => fetchProject(projectId!),
     enabled: Boolean(projectId),
   });
+
+  // DEO users can only edit projects in their own DEO
+  const canEdit = user?.role === 'super_admin' ||
+                  user?.role === 'regional_admin' ||
+                  (user?.role === 'deo_user' && project?.deo_id === user?.deo_id);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-PH', {
@@ -157,13 +164,15 @@ export default function ProjectDetail() {
           </Box>
         </Box>
 
-        <Button
-          variant="primary"
-          onClick={() => navigate(`/admin/projects/${projectId}/edit`)}
-          startIcon={<Edit size={20} />}
-        >
-          Edit Project
-        </Button>
+        {canEdit && (
+          <Button
+            variant="primary"
+            onClick={() => navigate(`/admin/projects/${projectId}/edit`)}
+            startIcon={<Edit size={20} />}
+          >
+            Edit Project
+          </Button>
+        )}
       </Box>
 
       {/* Tabs */}
@@ -305,14 +314,16 @@ export default function ProjectDetail() {
             <Typography variant="h6" fontWeight={600}>
               Progress Timeline
             </Typography>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => navigate(`/admin/projects/${projectId}/progress`)}
-              startIcon={<Plus size={18} />}
-            >
-              Report Progress
-            </Button>
+            {canEdit && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => navigate(`/admin/projects/${projectId}/progress`)}
+                startIcon={<Plus size={18} />}
+              >
+                Report Progress
+              </Button>
+            )}
           </Box>
           <ProgressTimeline projectId={projectId!} />
         </TabPanel>
@@ -323,14 +334,16 @@ export default function ProjectDetail() {
             <Typography variant="h6" fontWeight={600}>
               GIS Features
             </Typography>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => navigate(`/admin/projects/${projectId}/gis`)}
-              startIcon={<Edit size={18} />}
-            >
-              Edit GIS Features
-            </Button>
+            {canEdit && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => navigate(`/admin/projects/${projectId}/gis`)}
+                startIcon={<Edit size={18} />}
+              >
+                Edit GIS Features
+              </Button>
+            )}
           </Box>
           <ProjectGISView projectId={projectId!} />
         </TabPanel>
@@ -341,17 +354,19 @@ export default function ProjectDetail() {
             <Typography variant="h6" fontWeight={600}>
               Media Gallery
             </Typography>
-            <Button
-              variant={showUpload ? 'secondary' : 'primary'}
-              size="sm"
-              onClick={() => setShowUpload(!showUpload)}
-              startIcon={<Upload size={18} />}
-            >
-              {showUpload ? 'Hide Upload' : 'Upload Media'}
-            </Button>
+            {canEdit && (
+              <Button
+                variant={showUpload ? 'secondary' : 'primary'}
+                size="sm"
+                onClick={() => setShowUpload(!showUpload)}
+                startIcon={<Upload size={18} />}
+              >
+                {showUpload ? 'Hide Upload' : 'Upload Media'}
+              </Button>
+            )}
           </Box>
 
-          {showUpload && (
+          {showUpload && canEdit && (
             <Box sx={{ mb: 4 }}>
               <MediaUpload
                 projectId={projectId!}
@@ -363,7 +378,7 @@ export default function ProjectDetail() {
             </Box>
           )}
 
-          <MediaGallery projectId={projectId!} />
+          <MediaGallery projectId={projectId!} canDelete={canEdit} />
         </TabPanel>
 
         {/* Audit Tab */}

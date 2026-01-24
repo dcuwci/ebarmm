@@ -125,6 +125,7 @@ async def get_public_projects(
             "project_cost": float(project.project_cost) if project.project_cost else 0.0,
             "fund_year": project.fund_year,
             "status": project.status,
+            "deo_id": project.deo_id,
             "deo_name": deo_name,
             "current_progress": current_progress,
             "last_updated": latest_log.report_date if latest_log else None,

@@ -23,6 +23,7 @@ import { LeafletMap } from '../../components/map/LeafletMap';
 import { PhotoMarkers } from '../../components/map/PhotoMarkers';
 import { TimelineSlider } from '../../components/map/TimelineSlider';
 import { LoadingSpinner, FilterButton } from '../../components/mui';
+import { useFilterStore } from '../../stores/filterStore';
 import { apiClient } from '../../api/client';
 import { fetchGeotaggedMedia } from '../../api/media';
 
@@ -67,17 +68,28 @@ interface ProjectsResponse {
 export default function PublicMap() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>();
 
-  // Filter state
-  const [search, setSearch] = useState('');
-  const [selectedDEOs, setSelectedDEOs] = useState<number[]>([]);
-  const [selectedProvinces, setSelectedProvinces] = useState<string[]>([]);
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [selectedFundYears, setSelectedFundYears] = useState<number[]>([]);
-  const [selectedFundSources, setSelectedFundSources] = useState<string[]>([]);
-  const [selectedModes, setSelectedModes] = useState<string[]>([]);
-  const [selectedScales, setSelectedScales] = useState<string[]>([]);
+  // Filter state - persisted globally via Zustand store (shared with Dashboard/Projects)
+  const {
+    search,
+    selectedDEOs,
+    selectedProvinces,
+    selectedStatuses,
+    selectedFundYears,
+    selectedFundSources,
+    selectedModes,
+    selectedScales,
+    setSearch,
+    setSelectedDEOs,
+    setSelectedProvinces,
+    setSelectedStatuses,
+    setSelectedFundYears,
+    setSelectedFundSources,
+    setSelectedModes,
+    setSelectedScales,
+    clearAllFilters: storeClearAllFilters,
+  } = useFilterStore();
 
-  // Floating control state
+  // Map-specific UI state (not persisted)
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLButtonElement | null>(null);
   const [showPhotos, setShowPhotos] = useState(false);
@@ -216,14 +228,7 @@ export default function PublicMap() {
   const hasActiveFilters = activeFiltersCount > 0 || search.length > 0;
 
   const clearAllFilters = () => {
-    setSearch('');
-    setSelectedDEOs([]);
-    setSelectedProvinces([]);
-    setSelectedStatuses([]);
-    setSelectedFundYears([]);
-    setSelectedFundSources([]);
-    setSelectedModes([]);
-    setSelectedScales([]);
+    storeClearAllFilters();
     setSliderYear(null);
   };
 
