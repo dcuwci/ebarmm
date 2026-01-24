@@ -124,42 +124,12 @@ fun ProjectListScreen(
                 )
             )
 
-            // Status filter chips
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    selected = uiState.selectedStatus == null,
-                    onClick = { viewModel.setStatusFilter(null) },
-                    label = { Text("All") }
-                )
-                uiState.statuses.forEach { status ->
-                    FilterChip(
-                        selected = uiState.selectedStatus == status,
-                        onClick = {
-                            viewModel.setStatusFilter(
-                                if (uiState.selectedStatus == status) null else status
-                            )
-                        },
-                        label = { Text(status.replaceFirstChar { it.uppercase() }) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = getStatusColor(status).copy(alpha = 0.2f),
-                            selectedLabelColor = getStatusColor(status)
-                        )
-                    )
-                }
-            }
-
             // Active filters display
-            val hasAdvancedFilters = uiState.selectedDeoId != null || uiState.selectedFundYear != null ||
-                uiState.selectedProvince != null || uiState.selectedFundSource != null ||
-                uiState.selectedMode != null || uiState.selectedScale != null
+            val hasActiveFilters = uiState.selectedStatus != null || uiState.selectedDeoId != null ||
+                uiState.selectedFundYear != null || uiState.selectedProvince != null ||
+                uiState.selectedFundSource != null || uiState.selectedMode != null || uiState.selectedScale != null
 
-            if (hasAdvancedFilters) {
+            if (hasActiveFilters) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -167,6 +137,20 @@ fun ProjectListScreen(
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    uiState.selectedStatus?.let { status ->
+                        InputChip(
+                            selected = true,
+                            onClick = { viewModel.setStatusFilter(null) },
+                            label = { Text(status.replaceFirstChar { it.uppercase() }) },
+                            trailingIcon = {
+                                Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(16.dp))
+                            },
+                            colors = InputChipDefaults.inputChipColors(
+                                selectedContainerColor = getStatusColor(status).copy(alpha = 0.2f),
+                                selectedLabelColor = getStatusColor(status)
+                            )
+                        )
+                    }
                     uiState.selectedDeoId?.let { deoId ->
                         val deoName = uiState.deos.find { it.deoId == deoId }?.deoName ?: "DEO $deoId"
                         InputChip(
@@ -285,6 +269,7 @@ fun ProjectListScreen(
         if (uiState.showFilterSheet) {
             FilterBottomSheet(
                 uiState = uiState,
+                onStatusSelect = { viewModel.setStatusFilter(it) },
                 onDeoSelect = { viewModel.setDeoFilter(it) },
                 onProvinceSelect = { viewModel.setProvinceFilter(it) },
                 onFundYearSelect = { viewModel.setFundYearFilter(it) },
@@ -302,6 +287,7 @@ fun ProjectListScreen(
 @Composable
 private fun FilterBottomSheet(
     uiState: ProjectListUiState,
+    onStatusSelect: (String?) -> Unit,
     onDeoSelect: (Int?) -> Unit,
     onProvinceSelect: (String?) -> Unit,
     onFundYearSelect: (Int?) -> Unit,
@@ -338,6 +324,15 @@ private fun FilterBottomSheet(
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // Status Filter
+            item {
+                StatusFilterSection(
+                    statuses = uiState.statuses,
+                    selectedStatus = uiState.selectedStatus,
+                    onSelect = onStatusSelect
+                )
             }
 
             // DEO Filter
@@ -434,6 +429,46 @@ private fun FilterBottomSheet(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StatusFilterSection(
+    statuses: List<String>,
+    selectedStatus: String?,
+    onSelect: (String?) -> Unit
+) {
+    Text(
+        text = "Status",
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Medium
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = selectedStatus == null,
+            onClick = { onSelect(null) },
+            label = { Text("All") }
+        )
+        statuses.forEach { status ->
+            val color = getStatusColor(status)
+            FilterChip(
+                selected = selectedStatus == status,
+                onClick = { onSelect(if (selectedStatus == status) null else status) },
+                label = { Text(status.replaceFirstChar { it.uppercase() }) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = color.copy(alpha = 0.2f),
+                    selectedLabelColor = color
+                )
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(16.dp))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

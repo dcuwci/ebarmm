@@ -9,6 +9,7 @@ import android.graphics.Color as AndroidColor
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,26 +22,37 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -107,6 +119,28 @@ fun MapScreen(
                     }
                 },
                 actions = {
+                    // Filter button with badge
+                    val activeFilterCount = listOfNotNull(
+                        uiState.selectedStatus,
+                        uiState.selectedDeoId?.let { "deo" },
+                        uiState.selectedFundYear?.let { "year" },
+                        uiState.selectedProvince,
+                        uiState.selectedFundSource,
+                        uiState.selectedMode,
+                        uiState.selectedScale
+                    ).size
+
+                    BadgedBox(
+                        badge = {
+                            if (activeFilterCount > 0) {
+                                Badge { Text(activeFilterCount.toString()) }
+                            }
+                        }
+                    ) {
+                        IconButton(onClick = { viewModel.toggleFilterSheet() }) {
+                            Icon(Icons.Default.FilterList, contentDescription = "Filters")
+                        }
+                    }
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
                     }
@@ -197,39 +231,148 @@ fun MapScreen(
                 }
 
                 // Top controls row
-                Row(
+                Column(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
+                        .align(Alignment.TopStart)
                         .padding(8.dp)
                 ) {
-                    // Photo markers toggle
-                    FilterChip(
-                        selected = showPhotoMarkers,
-                        onClick = { showPhotoMarkers = !showPhotoMarkers },
-                        label = { Text("Photos") },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.CameraAlt,
-                                contentDescription = null,
-                                modifier = Modifier.padding(0.dp)
+                    Row {
+                        // Photo markers toggle
+                        FilterChip(
+                            selected = showPhotoMarkers,
+                            onClick = { showPhotoMarkers = !showPhotoMarkers },
+                            label = { Text("Photos") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.CameraAlt,
+                                    contentDescription = null,
+                                    modifier = Modifier.padding(0.dp)
+                                )
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        // Project count indicator
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        ) {
+                            Text(
+                                text = "${geometries.size} projects",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.labelMedium
                             )
                         }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // Project count indicator
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
-                        Text(
-                            text = "${geometries.size} projects",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            style = MaterialTheme.typography.labelMedium
-                        )
+                    }
+
+                    // Active filters display
+                    val hasActiveFilters = uiState.selectedStatus != null || uiState.selectedDeoId != null ||
+                        uiState.selectedFundYear != null || uiState.selectedProvince != null ||
+                        uiState.selectedFundSource != null || uiState.selectedMode != null || uiState.selectedScale != null
+
+                    if (hasActiveFilters) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            uiState.selectedStatus?.let { status ->
+                                InputChip(
+                                    selected = true,
+                                    onClick = { viewModel.setStatusFilter(null) },
+                                    label = { Text(status.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall) },
+                                    trailingIcon = {
+                                        Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(14.dp))
+                                    },
+                                    colors = InputChipDefaults.inputChipColors(
+                                        selectedContainerColor = getStatusColor(status).copy(alpha = 0.2f),
+                                        selectedLabelColor = getStatusColor(status)
+                                    )
+                                )
+                            }
+                            uiState.selectedDeoId?.let { deoId ->
+                                val deoName = uiState.deos.find { it.deoId == deoId }?.deoName ?: "DEO $deoId"
+                                InputChip(
+                                    selected = true,
+                                    onClick = { viewModel.setDeoFilter(null) },
+                                    label = { Text(deoName, style = MaterialTheme.typography.labelSmall) },
+                                    trailingIcon = {
+                                        Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(14.dp))
+                                    }
+                                )
+                            }
+                            uiState.selectedProvince?.let { province ->
+                                InputChip(
+                                    selected = true,
+                                    onClick = { viewModel.setProvinceFilter(null) },
+                                    label = { Text(province, style = MaterialTheme.typography.labelSmall) },
+                                    trailingIcon = {
+                                        Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(14.dp))
+                                    }
+                                )
+                            }
+                            uiState.selectedFundYear?.let { year ->
+                                InputChip(
+                                    selected = true,
+                                    onClick = { viewModel.setFundYearFilter(null) },
+                                    label = { Text("$year", style = MaterialTheme.typography.labelSmall) },
+                                    trailingIcon = {
+                                        Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(14.dp))
+                                    }
+                                )
+                            }
+                            uiState.selectedFundSource?.let { source ->
+                                InputChip(
+                                    selected = true,
+                                    onClick = { viewModel.setFundSourceFilter(null) },
+                                    label = { Text(source, style = MaterialTheme.typography.labelSmall) },
+                                    trailingIcon = {
+                                        Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(14.dp))
+                                    }
+                                )
+                            }
+                            uiState.selectedMode?.let { mode ->
+                                InputChip(
+                                    selected = true,
+                                    onClick = { viewModel.setModeFilter(null) },
+                                    label = { Text(mode, style = MaterialTheme.typography.labelSmall) },
+                                    trailingIcon = {
+                                        Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(14.dp))
+                                    }
+                                )
+                            }
+                            uiState.selectedScale?.let { scale ->
+                                InputChip(
+                                    selected = true,
+                                    onClick = { viewModel.setScaleFilter(null) },
+                                    label = { Text(scale, style = MaterialTheme.typography.labelSmall) },
+                                    trailingIcon = {
+                                        Icon(Icons.Default.Clear, contentDescription = "Remove", modifier = Modifier.size(14.dp))
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }
+        }
+
+        // Filter bottom sheet
+        if (uiState.showFilterSheet) {
+            MapFilterBottomSheet(
+                uiState = uiState,
+                onStatusSelect = { viewModel.setStatusFilter(it) },
+                onDeoSelect = { viewModel.setDeoFilter(it) },
+                onProvinceSelect = { viewModel.setProvinceFilter(it) },
+                onFundYearSelect = { viewModel.setFundYearFilter(it) },
+                onFundSourceSelect = { viewModel.setFundSourceFilter(it) },
+                onModeSelect = { viewModel.setModeFilter(it) },
+                onScaleSelect = { viewModel.setScaleFilter(it) },
+                onDismiss = { viewModel.hideFilterSheet() },
+                onClearAll = { viewModel.clearFilters() }
+            )
         }
     }
 }
@@ -662,6 +805,230 @@ private fun PhotoPreviewCard(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MapFilterBottomSheet(
+    uiState: MapUiState,
+    onStatusSelect: (String?) -> Unit,
+    onDeoSelect: (Int?) -> Unit,
+    onProvinceSelect: (String?) -> Unit,
+    onFundYearSelect: (Int?) -> Unit,
+    onFundSourceSelect: (String?) -> Unit,
+    onModeSelect: (String?) -> Unit,
+    onScaleSelect: (String?) -> Unit,
+    onDismiss: () -> Unit,
+    onClearAll: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Filters",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    TextButton(onClick = {
+                        onClearAll()
+                        onDismiss()
+                    }) {
+                        Text("Clear All")
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // Status Filter
+            item {
+                MapStatusFilterSection(
+                    statuses = uiState.statuses,
+                    selectedStatus = uiState.selectedStatus,
+                    onSelect = onStatusSelect
+                )
+            }
+
+            // DEO Filter
+            item {
+                MapFilterSection(
+                    title = "DEO",
+                    options = uiState.deos.map { "${it.deoName} (${it.projectCount})" },
+                    selectedIndex = uiState.deos.indexOfFirst { it.deoId == uiState.selectedDeoId },
+                    onSelect = { index ->
+                        onDeoSelect(if (index < 0) null else uiState.deos[index].deoId)
+                    }
+                )
+            }
+
+            // Province Filter
+            if (uiState.provinces.isNotEmpty()) {
+                item {
+                    MapFilterSection(
+                        title = "Province",
+                        options = uiState.provinces,
+                        selectedIndex = uiState.provinces.indexOf(uiState.selectedProvince),
+                        onSelect = { index ->
+                            onProvinceSelect(if (index < 0) null else uiState.provinces[index])
+                        }
+                    )
+                }
+            }
+
+            // Fund Year Filter
+            if (uiState.fundYears.isNotEmpty()) {
+                item {
+                    MapFilterSection(
+                        title = "Fund Year",
+                        options = uiState.fundYears.map { it.toString() },
+                        selectedIndex = uiState.fundYears.indexOf(uiState.selectedFundYear),
+                        onSelect = { index ->
+                            onFundYearSelect(if (index < 0) null else uiState.fundYears[index])
+                        }
+                    )
+                }
+            }
+
+            // Fund Source Filter
+            if (uiState.fundSources.isNotEmpty()) {
+                item {
+                    MapFilterSection(
+                        title = "Fund Source",
+                        options = uiState.fundSources,
+                        selectedIndex = uiState.fundSources.indexOf(uiState.selectedFundSource),
+                        onSelect = { index ->
+                            onFundSourceSelect(if (index < 0) null else uiState.fundSources[index])
+                        }
+                    )
+                }
+            }
+
+            // Mode of Implementation Filter
+            if (uiState.modes.isNotEmpty()) {
+                item {
+                    MapFilterSection(
+                        title = "Mode of Implementation",
+                        options = uiState.modes,
+                        selectedIndex = uiState.modes.indexOf(uiState.selectedMode),
+                        onSelect = { index ->
+                            onModeSelect(if (index < 0) null else uiState.modes[index])
+                        }
+                    )
+                }
+            }
+
+            // Project Scale Filter
+            if (uiState.scales.isNotEmpty()) {
+                item {
+                    MapFilterSection(
+                        title = "Project Scale",
+                        options = uiState.scales,
+                        selectedIndex = uiState.scales.indexOf(uiState.selectedScale),
+                        onSelect = { index ->
+                            onScaleSelect(if (index < 0) null else uiState.scales[index])
+                        }
+                    )
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Apply Filters")
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MapStatusFilterSection(
+    statuses: List<String>,
+    selectedStatus: String?,
+    onSelect: (String?) -> Unit
+) {
+    Text(
+        text = "Status",
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Medium
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = selectedStatus == null,
+            onClick = { onSelect(null) },
+            label = { Text("All") }
+        )
+        statuses.forEach { status ->
+            val color = getStatusColor(status)
+            FilterChip(
+                selected = selectedStatus == status,
+                onClick = { onSelect(if (selectedStatus == status) null else status) },
+                label = { Text(status.replaceFirstChar { it.uppercase() }) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = color.copy(alpha = 0.2f),
+                    selectedLabelColor = color
+                )
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(16.dp))
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MapFilterSection(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Medium
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        FilterChip(
+            selected = selectedIndex < 0,
+            onClick = { onSelect(-1) },
+            label = { Text("All") }
+        )
+        options.forEachIndexed { index, option ->
+            FilterChip(
+                selected = selectedIndex == index,
+                onClick = { onSelect(if (selectedIndex == index) -1 else index) },
+                label = { Text(option) }
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(16.dp))
 }
 
 data class PhotoMarker(

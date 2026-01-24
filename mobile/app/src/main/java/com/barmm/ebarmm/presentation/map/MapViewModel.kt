@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.barmm.ebarmm.data.local.database.dao.MediaDao
 import com.barmm.ebarmm.data.local.database.dao.ProjectDao
 import com.barmm.ebarmm.data.remote.api.MediaApi
+import com.barmm.ebarmm.data.remote.dto.DeoOption
 import com.barmm.ebarmm.data.remote.dto.PublicProjectResponse
 import com.barmm.ebarmm.domain.repository.StatsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,7 +23,24 @@ data class MapUiState(
     val error: String? = null,
     val projects: List<PublicProjectResponse> = emptyList(),
     val selectedProject: PublicProjectResponse? = null,
-    val photoMarkers: List<PhotoMarker> = emptyList()
+    val photoMarkers: List<PhotoMarker> = emptyList(),
+    // Filter state
+    val selectedStatus: String? = null,
+    val selectedDeoId: Int? = null,
+    val selectedFundYear: Int? = null,
+    val selectedProvince: String? = null,
+    val selectedFundSource: String? = null,
+    val selectedMode: String? = null,
+    val selectedScale: String? = null,
+    // Filter options
+    val statuses: List<String> = listOf("planning", "ongoing", "completed", "suspended"),
+    val deos: List<DeoOption> = emptyList(),
+    val fundYears: List<Int> = emptyList(),
+    val provinces: List<String> = emptyList(),
+    val fundSources: List<String> = emptyList(),
+    val modes: List<String> = emptyList(),
+    val scales: List<String> = emptyList(),
+    val showFilterSheet: Boolean = false
 )
 
 sealed class ProjectGeometry {
@@ -76,15 +94,47 @@ class MapViewModel @Inject constructor(
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
     init {
+        loadFilterOptions()
         loadProjects()
         loadPhotoMarkers()
+    }
+
+    private fun loadFilterOptions() {
+        viewModelScope.launch {
+            statsRepository.getFilterOptions().fold(
+                onSuccess = { options ->
+                    _uiState.update {
+                        it.copy(
+                            deos = options.deos,
+                            fundYears = options.fundYears,
+                            statuses = options.statuses,
+                            provinces = options.provinces,
+                            fundSources = options.fundSources,
+                            modes = options.modesOfImplementation,
+                            scales = options.projectScales
+                        )
+                    }
+                },
+                onFailure = { /* Ignore, use defaults */ }
+            )
+        }
     }
 
     fun loadProjects() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
 
-            statsRepository.getPublicProjects().fold(
+            val state = _uiState.value
+            statsRepository.getFilteredProjects(
+                search = null,
+                status = state.selectedStatus,
+                deoId = state.selectedDeoId,
+                fundYear = state.selectedFundYear,
+                province = state.selectedProvince,
+                fundSource = state.selectedFundSource,
+                modeOfImplementation = state.selectedMode,
+                projectScale = state.selectedScale
+            ).fold(
                 onSuccess = { projects ->
                     _uiState.update {
                         it.copy(
@@ -332,4 +382,70 @@ class MapViewModel @Inject constructor(
         loadProjects()
         loadPhotoMarkers()
     }
+
+    // Filter methods
+    fun setStatusFilter(status: String?) {
+        _uiState.update { it.copy(selectedStatus = status) }
+        loadProjects()
+    }
+
+    fun setDeoFilter(deoId: Int?) {
+        _uiState.update { it.copy(selectedDeoId = deoId) }
+        loadProjects()
+    }
+
+    fun setFundYearFilter(year: Int?) {
+        _uiState.update { it.copy(selectedFundYear = year) }
+        loadProjects()
+    }
+
+    fun setProvinceFilter(province: String?) {
+        _uiState.update { it.copy(selectedProvince = province) }
+        loadProjects()
+    }
+
+    fun setFundSourceFilter(source: String?) {
+        _uiState.update { it.copy(selectedFundSource = source) }
+        loadProjects()
+    }
+
+    fun setModeFilter(mode: String?) {
+        _uiState.update { it.copy(selectedMode = mode) }
+        loadProjects()
+    }
+
+    fun setScaleFilter(scale: String?) {
+        _uiState.update { it.copy(selectedScale = scale) }
+        loadProjects()
+    }
+
+    fun clearFilters() {
+        _uiState.update {
+            it.copy(
+                selectedStatus = null,
+                selectedDeoId = null,
+                selectedFundYear = null,
+                selectedProvince = null,
+                selectedFundSource = null,
+                selectedMode = null,
+                selectedScale = null
+            )
+        }
+        loadProjects()
+    }
+
+    fun toggleFilterSheet() {
+        _uiState.update { it.copy(showFilterSheet = !it.showFilterSheet) }
+    }
+
+    fun hideFilterSheet() {
+        _uiState.update { it.copy(showFilterSheet = false) }
+    }
+
+    val hasActiveFilters: Boolean
+        get() = with(_uiState.value) {
+            selectedStatus != null || selectedDeoId != null || selectedFundYear != null ||
+            selectedProvince != null || selectedFundSource != null || selectedMode != null ||
+            selectedScale != null
+        }
 }
