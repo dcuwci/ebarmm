@@ -1,11 +1,13 @@
 package com.barmm.ebarmm.di
 
 import com.barmm.ebarmm.data.repository.AuthRepositoryImpl
+import com.barmm.ebarmm.data.repository.GpsTrackRepositoryImpl
 import com.barmm.ebarmm.data.repository.MediaRepositoryImpl
 import com.barmm.ebarmm.data.repository.ProgressRepositoryImpl
 import com.barmm.ebarmm.data.repository.ProjectRepositoryImpl
 import com.barmm.ebarmm.data.repository.StatsRepositoryImpl
 import com.barmm.ebarmm.domain.repository.AuthRepository
+import com.barmm.ebarmm.domain.repository.GpsTrackRepository
 import com.barmm.ebarmm.domain.repository.MediaRepository
 import com.barmm.ebarmm.domain.repository.ProgressRepository
 import com.barmm.ebarmm.domain.repository.ProjectRepository
@@ -39,4 +41,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindStatsRepository(impl: StatsRepositoryImpl): StatsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindGpsTrackRepository(impl: GpsTrackRepositoryImpl): GpsTrackRepository
 }

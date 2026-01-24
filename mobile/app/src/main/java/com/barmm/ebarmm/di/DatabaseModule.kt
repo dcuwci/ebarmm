@@ -3,6 +3,7 @@ package com.barmm.ebarmm.di
 import android.content.Context
 import androidx.room.Room
 import com.barmm.ebarmm.data.local.database.AppDatabase
+import com.barmm.ebarmm.data.local.database.dao.GpsTrackDao
 import com.barmm.ebarmm.data.local.database.dao.MediaDao
 import com.barmm.ebarmm.data.local.database.dao.ProgressDao
 import com.barmm.ebarmm.data.local.database.dao.ProjectDao
@@ -27,6 +28,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "ebarmm_db"
         )
+            .addMigrations(AppDatabase.MIGRATION_2_3)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -45,4 +47,7 @@ object DatabaseModule {
 
     @Provides
     fun provideSyncQueueDao(database: AppDatabase): SyncQueueDao = database.syncQueueDao()
+
+    @Provides
+    fun provideGpsTrackDao(database: AppDatabase): GpsTrackDao = database.gpsTrackDao()
 }

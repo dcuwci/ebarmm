@@ -111,6 +111,7 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.3.0")
     implementation("androidx.camera:camera-lifecycle:1.3.0")
     implementation("androidx.camera:camera-view:1.3.0")
+    implementation("androidx.camera:camera-video:1.3.0")
 
     // Location
     implementation("com.google.android.gms:play-services-location:21.0.1")
