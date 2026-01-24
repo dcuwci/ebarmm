@@ -427,7 +427,7 @@ fun ProjectCard(
 
             // Progress bar
             LinearProgressIndicator(
-                progress = { ((project.currentProgress ?: 0.0) / 100).toFloat() },
+                progress = ((project.currentProgress ?: 0.0) / 100).toFloat(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(6.dp),
