@@ -22,8 +22,14 @@ import { ChevronLeft, ChevronRight, Save } from 'lucide-react';
 import { Button, LoadingSpinner } from '../../components/mui';
 import { projectFormSchema, type ProjectFormData } from '../../types/validation';
 import { createProject, updateProject, fetchProject } from '../../api/projects';
-import { getErrorMessage } from '../../api/client';
+import { getErrorMessage, apiClient } from '../../api/client';
 import { useAuthStore } from '../../stores/authStore';
+
+interface DEO {
+  deo_id: number;
+  deo_name: string;
+  province: string;
+}
 
 const STEPS = ['Basic Information', 'Financial Details', 'Review & Submit'];
 
@@ -88,6 +94,22 @@ export default function ProjectForm() {
     queryFn: () => fetchProject(projectId!),
     enabled: isEditMode,
   });
+
+  // Fetch DEOs for admin users
+  const { data: deoList = [] } = useQuery({
+    queryKey: ['deoList'],
+    queryFn: async () => {
+      const response = await apiClient.get('/public/filter-options');
+      return response.data.deos as DEO[];
+    },
+    enabled: user?.role === 'super_admin' || user?.role === 'regional_admin',
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Filter DEOs by region for regional_admin
+  const availableDEOs = user?.role === 'regional_admin'
+    ? deoList.filter((d: DEO) => d.province === user.region) // Note: adjust if region field differs
+    : deoList;
 
   // Populate form with existing data
   useEffect(() => {
@@ -156,6 +178,10 @@ export default function ProjectForm() {
 
     if (activeStep === 0) {
       fieldsToValidate = ['project_title', 'fund_year'];
+      // Also validate deo_id for admin roles
+      if (user?.role === 'super_admin' || user?.role === 'regional_admin') {
+        fieldsToValidate.push('deo_id');
+      }
     } else if (activeStep === 1) {
       fieldsToValidate = ['project_cost'];
     }
@@ -281,6 +307,36 @@ export default function ProjectForm() {
                     )}
                   />
                 </Grid>
+
+                {/* DEO Selector - only for super_admin and regional_admin */}
+                {(user?.role === 'super_admin' || user?.role === 'regional_admin') && (
+                  <Grid item xs={12} md={6}>
+                    <Controller
+                      name="deo_id"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          select
+                          label="DEO (District Engineering Office)"
+                          required
+                          fullWidth
+                          error={!!errors.deo_id}
+                          helperText={errors.deo_id?.message || 'Select the DEO responsible for this project'}
+                          value={field.value || ''}
+                          onChange={(e) => field.onChange(Number(e.target.value))}
+                        >
+                          <MenuItem value="">Select DEO</MenuItem>
+                          {availableDEOs.map((deo: DEO) => (
+                            <MenuItem key={deo.deo_id} value={deo.deo_id}>
+                              {deo.deo_name} ({deo.province})
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      )}
+                    />
+                  </Grid>
+                )}
               </Grid>
             </Box>
           )}
@@ -453,6 +509,20 @@ export default function ProjectForm() {
                       {formValues.project_scale || '—'}
                     </Typography>
                   </Grid>
+
+                  {/* Show DEO for admin users */}
+                  {(user?.role === 'super_admin' || user?.role === 'regional_admin') && (
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="caption" color="text.secondary">
+                        DEO
+                      </Typography>
+                      <Typography fontWeight={500}>
+                        {formValues.deo_id
+                          ? availableDEOs.find((d: DEO) => d.deo_id === formValues.deo_id)?.deo_name || '—'
+                          : '—'}
+                      </Typography>
+                    </Grid>
+                  )}
                 </Grid>
               </Paper>
 
