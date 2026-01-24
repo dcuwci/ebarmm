@@ -3,6 +3,8 @@ package com.barmm.ebarmm.presentation.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.barmm.ebarmm.data.local.database.entity.ProjectEntity
+import com.barmm.ebarmm.data.local.database.entity.UserEntity
+import com.barmm.ebarmm.domain.repository.AuthRepository
 import com.barmm.ebarmm.domain.repository.ProjectRepository
 import com.barmm.ebarmm.domain.repository.StatsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,12 +24,15 @@ data class DashboardUiState(
     val ongoingProjects: Int = 0,
     val completedProjects: Int = 0,
     val totalInvestment: Double = 0.0,
-    val avgProgress: Double = 0.0
+    val avgProgress: Double = 0.0,
+    val currentUser: UserEntity? = null,
+    val isLoggingOut: Boolean = false
 )
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val statsRepository: StatsRepository,
+    private val authRepository: AuthRepository,
     projectRepository: ProjectRepository
 ) : ViewModel() {
 
@@ -43,6 +48,14 @@ class DashboardViewModel @Inject constructor(
 
     init {
         loadStats()
+        loadCurrentUser()
+    }
+
+    private fun loadCurrentUser() {
+        viewModelScope.launch {
+            val user = authRepository.getCurrentUser()
+            _uiState.update { it.copy(currentUser = user) }
+        }
     }
 
     fun loadStats() {
@@ -76,5 +89,15 @@ class DashboardViewModel @Inject constructor(
 
     fun refresh() {
         loadStats()
+        loadCurrentUser()
+    }
+
+    fun logout(onLogoutComplete: () -> Unit) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoggingOut = true) }
+            authRepository.logout()
+            _uiState.update { it.copy(isLoggingOut = false, currentUser = null) }
+            onLogoutComplete()
+        }
     }
 }

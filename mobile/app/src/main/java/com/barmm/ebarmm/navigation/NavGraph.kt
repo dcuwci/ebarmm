@@ -132,6 +132,11 @@ fun NavGraph(
                 DashboardScreen(
                     onProjectClick = { projectId ->
                         navController.navigate(Screen.ProjectDetail.createRoute(projectId))
+                    },
+                    onLogout = {
+                        navController.navigate(Screen.Login.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
                     }
                 )
             }
