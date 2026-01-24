@@ -19,6 +19,7 @@ import Collapse from '@mui/material/Collapse';
 import { Search, Filter, X, RefreshCw, Camera } from 'lucide-react';
 import { LeafletMap } from '../../components/map/LeafletMap';
 import { PhotoMarkers } from '../../components/map/PhotoMarkers';
+import { TimelineSlider } from '../../components/map/TimelineSlider';
 import { LoadingSpinner, FilterButton } from '../../components/mui';
 import { apiClient } from '../../api/client';
 import { fetchGeotaggedMedia } from '../../api/media';
@@ -79,6 +80,7 @@ export default function AdminMap() {
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLButtonElement | null>(null);
   const [showPhotos, setShowPhotos] = useState(false);
+  const [sliderYear, setSliderYear] = useState<number | null>(null);
 
   // Fetch filter options
   const { data: filterOptions } = useQuery({
@@ -132,8 +134,10 @@ export default function AdminMap() {
       items = items.filter((p) => selectedStatuses.includes(p.status));
     }
 
-    // Fund Year filter
-    if (selectedFundYears.length > 0) {
+    // Fund Year filter (slider takes priority over dropdown)
+    if (sliderYear !== null) {
+      items = items.filter((p) => p.fund_year === sliderYear);
+    } else if (selectedFundYears.length > 0) {
       items = items.filter((p) => p.fund_year && selectedFundYears.includes(p.fund_year));
     }
 
@@ -161,7 +165,7 @@ export default function AdminMap() {
     }
 
     return items;
-  }, [data, search, selectedDEOs, selectedStatuses, selectedFundYears, selectedProvinces, selectedFundSources, selectedModes, selectedScales, filterOptions]);
+  }, [data, search, selectedDEOs, selectedStatuses, selectedFundYears, sliderYear, selectedProvinces, selectedFundSources, selectedModes, selectedScales, filterOptions]);
 
   // Filter projects that have geometry for the map
   const projectsWithGeometry = useMemo(() => {
@@ -187,7 +191,8 @@ export default function AdminMap() {
     selectedFundYears.length +
     selectedFundSources.length +
     selectedModes.length +
-    selectedScales.length;
+    selectedScales.length +
+    (sliderYear !== null ? 1 : 0);
 
   const hasActiveFilters = activeFiltersCount > 0 || search.length > 0;
 
@@ -200,6 +205,15 @@ export default function AdminMap() {
     setSelectedFundSources([]);
     setSelectedModes([]);
     setSelectedScales([]);
+    setSliderYear(null);
+  };
+
+  // Handle slider year change - clear dropdown filter when using slider
+  const handleSliderYearChange = (year: number | null) => {
+    setSliderYear(year);
+    if (year !== null) {
+      setSelectedFundYears([]); // Clear dropdown when using slider
+    }
   };
 
   // DEO helpers
@@ -489,6 +503,26 @@ export default function AdminMap() {
           <PhotoMarkers photos={geotaggedPhotos} />
         )}
       </LeafletMap>
+
+      {/* Timeline Slider */}
+      {filterOptions && filterOptions.fund_years.length > 1 && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1000,
+          }}
+        >
+          <TimelineSlider
+            years={filterOptions.fund_years}
+            selectedYear={sliderYear}
+            onChange={handleSliderYearChange}
+            enableAutoPlay
+          />
+        </Box>
+      )}
     </Box>
   );
 }
