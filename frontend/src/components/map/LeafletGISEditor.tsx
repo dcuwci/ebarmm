@@ -339,6 +339,24 @@ export const LeafletGISEditor: React.FC<LeafletGISEditorProps> = ({
     hasInitialFitRef.current = false;
   }, [initialWKT]);
 
+  // Clear coordinates when initialWKT becomes undefined (new feature mode)
+  // or when editable becomes false (exiting edit session)
+  useEffect(() => {
+    if (!initialWKT && editable) {
+      // Starting new feature - clear any existing coordinates
+      setCoordinates([]);
+      setIsDrawing(false);
+    }
+  }, [initialWKT, editable]);
+
+  // Reset state when exiting edit mode
+  useEffect(() => {
+    if (!editable) {
+      setCoordinates([]);
+      setIsDrawing(false);
+    }
+  }, [editable]);
+
   // Load initial geometry
   // Note: parseWKTGeometry returns coordinates in [lat, lng] order (Leaflet format)
   useEffect(() => {
