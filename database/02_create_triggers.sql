@@ -119,175 +119,38 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- =============================================================================
--- ROW LEVEL SECURITY POLICIES
+-- ROW LEVEL SECURITY (RLS) - DISABLED
+-- =============================================================================
+--
+-- NOTE: RLS is intentionally DISABLED for this application.
+--
+-- Authorization is handled at the API layer (FastAPI) which:
+-- - Validates JWT tokens and extracts user roles
+-- - Filters data based on user permissions (DEO, region, role)
+-- - Enforces access control before database queries
+--
+-- RLS would require the app to set session variables before each query
+-- (via set_session_user function above), which adds complexity without
+-- significant security benefit since:
+-- 1. All database access goes through the API (no direct user DB access)
+-- 2. The API already implements proper authorization checks
+-- 3. A single database user (ebarmm_app) is used for connection pooling
+--
+-- The helper functions above (set_session_user, current_user_role, etc.)
+-- are kept for potential future use if RLS is needed.
+--
+-- To enable RLS in the future, uncomment the policies below and ensure
+-- the API calls set_session_user() at the start of each request.
 -- =============================================================================
 
--- Enable RLS on sensitive tables
-ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
-ALTER TABLE project_progress_logs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE gis_features ENABLE ROW LEVEL SECURITY;
-ALTER TABLE media_assets ENABLE ROW LEVEL SECURITY;
-ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+-- RLS is DISABLED - uncomment to enable
+-- ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE project_progress_logs ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE gis_features ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE media_assets ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
--- Projects RLS Policies
-CREATE POLICY projects_select_policy ON projects
-FOR SELECT
-USING (
-    current_user_role() = 'super_admin' OR
-    (current_user_role() = 'regional_admin' AND deo_id IN (
-        SELECT deo_id FROM deo WHERE region = current_user_region()
-    )) OR
-    (current_user_role() = 'deo_user' AND deo_id = current_user_deo_id()) OR
-    (current_user_role() = 'public' AND status NOT IN ('deleted', 'cancelled'))
-);
-
-CREATE POLICY projects_insert_policy ON projects
-FOR INSERT
-WITH CHECK (
-    current_user_role() = 'super_admin' OR
-    (current_user_role() = 'regional_admin' AND deo_id IN (
-        SELECT deo_id FROM deo WHERE region = current_user_region()
-    )) OR
-    (current_user_role() = 'deo_user' AND deo_id = current_user_deo_id())
-);
-
-CREATE POLICY projects_update_policy ON projects
-FOR UPDATE
-USING (
-    current_user_role() = 'super_admin' OR
-    (current_user_role() = 'regional_admin' AND deo_id IN (
-        SELECT deo_id FROM deo WHERE region = current_user_region()
-    )) OR
-    (current_user_role() = 'deo_user' AND deo_id = current_user_deo_id())
-);
-
-CREATE POLICY projects_delete_policy ON projects
-FOR DELETE
-USING (current_user_role() = 'super_admin');
-
--- Progress Logs RLS Policies
-CREATE POLICY progress_select_policy ON project_progress_logs
-FOR SELECT
-USING (
-    current_user_role() = 'super_admin' OR
-    (current_user_role() = 'regional_admin' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id IN (
-            SELECT deo_id FROM deo WHERE region = current_user_region()
-        )
-    )) OR
-    (current_user_role() = 'deo_user' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id = current_user_deo_id()
-    )) OR
-    current_user_role() = 'public'
-);
-
-CREATE POLICY progress_insert_policy ON project_progress_logs
-FOR INSERT
-WITH CHECK (
-    current_user_role() = 'super_admin' OR
-    (current_user_role() = 'regional_admin' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id IN (
-            SELECT deo_id FROM deo WHERE region = current_user_region()
-        )
-    )) OR
-    (current_user_role() = 'deo_user' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id = current_user_deo_id()
-    ))
-);
-
--- GIS Features RLS Policies
-CREATE POLICY gis_select_policy ON gis_features
-FOR SELECT
-USING (
-    current_user_role() = 'super_admin' OR
-    (current_user_role() = 'regional_admin' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id IN (
-            SELECT deo_id FROM deo WHERE region = current_user_region()
-        )
-    )) OR
-    (current_user_role() = 'deo_user' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id = current_user_deo_id()
-    )) OR
-    current_user_role() = 'public'
-);
-
-CREATE POLICY gis_insert_policy ON gis_features
-FOR INSERT
-WITH CHECK (
-    current_user_role() = 'super_admin' OR
-    (current_user_role() = 'regional_admin' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id IN (
-            SELECT deo_id FROM deo WHERE region = current_user_region()
-        )
-    )) OR
-    (current_user_role() = 'deo_user' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id = current_user_deo_id()
-    ))
-);
-
-CREATE POLICY gis_update_policy ON gis_features
-FOR UPDATE
-USING (
-    current_user_role() = 'super_admin' OR
-    (current_user_role() = 'regional_admin' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id IN (
-            SELECT deo_id FROM deo WHERE region = current_user_region()
-        )
-    )) OR
-    (current_user_role() = 'deo_user' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id = current_user_deo_id()
-    ))
-);
-
-CREATE POLICY gis_delete_policy ON gis_features
-FOR DELETE
-USING (
-    current_user_role() = 'super_admin' OR
-    (current_user_role() = 'deo_user' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id = current_user_deo_id()
-    ))
-);
-
--- Media Assets RLS Policies (similar to GIS features)
-CREATE POLICY media_select_policy ON media_assets
-FOR SELECT
-USING (
-    current_user_role() = 'super_admin' OR
-    (current_user_role() = 'regional_admin' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id IN (
-            SELECT deo_id FROM deo WHERE region = current_user_region()
-        )
-    )) OR
-    (current_user_role() = 'deo_user' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id = current_user_deo_id()
-    )) OR
-    current_user_role() = 'public'
-);
-
-CREATE POLICY media_insert_policy ON media_assets
-FOR INSERT
-WITH CHECK (
-    current_user_role() = 'super_admin' OR
-    (current_user_role() = 'deo_user' AND project_id IN (
-        SELECT project_id FROM projects WHERE deo_id = current_user_deo_id()
-    ))
-);
-
-CREATE POLICY media_delete_policy ON media_assets
-FOR DELETE
-USING (
-    current_user_role() = 'super_admin' OR
-    (current_user_role() = 'deo_user' AND uploaded_by = current_setting('app.user_id', true)::uuid)
-);
-
--- Audit Logs RLS Policy (super_admin only)
-CREATE POLICY audit_select_policy ON audit_logs
-FOR SELECT
-USING (current_user_role() = 'super_admin');
-
-CREATE POLICY audit_insert_policy ON audit_logs
-FOR INSERT
-WITH CHECK (true);  -- Anyone can insert audit logs (API handles this)
+-- See git history for full RLS policy definitions if needed in the future
 
 -- =============================================================================
 -- DATA VALIDATION TRIGGERS
