@@ -50,8 +50,13 @@ if sudo dnf list available | grep -q postgis; then
     sudo dnf install -y postgis34_15 || print_warning "PostGIS package not found, will install extensions manually"
 fi
 
-# Initialize PostgreSQL
-sudo postgresql-setup --initdb
+# Initialize PostgreSQL (skip if already initialized)
+if [ ! -f /var/lib/pgsql/data/PG_VERSION ]; then
+    sudo postgresql-setup --initdb
+    print_status "PostgreSQL initialized"
+else
+    print_warning "PostgreSQL already initialized, skipping initdb"
+fi
 
 # Start and enable PostgreSQL
 sudo systemctl start postgresql
@@ -65,11 +70,28 @@ print_status "PostgreSQL 15 installed and running"
 echo ""
 echo "Step 3: Configuring PostgreSQL..."
 
-# Generate random password for database
-DB_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
+# Check if database already exists
+if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw ebarmm; then
+    print_warning "Database 'ebarmm' already exists, skipping creation"
+    # Still need to get password from user or generate new one
+    echo ""
+    echo "Since the database already exists, please enter the existing DB_PASSWORD"
+    echo "or press Enter to generate a new one (will update the user password):"
+    read -r EXISTING_PASSWORD
+    if [ -n "$EXISTING_PASSWORD" ]; then
+        DB_PASSWORD="$EXISTING_PASSWORD"
+    else
+        DB_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
+        # Update password for existing user
+        sudo -u postgres psql -c "ALTER USER ebarmm_app WITH PASSWORD '${DB_PASSWORD}';"
+        print_status "Generated new password and updated user"
+    fi
+else
+    # Generate random password for database
+    DB_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
 
-# Create database and user
-sudo -u postgres psql <<EOF
+    # Create database and user
+    sudo -u postgres psql <<EOF
 -- Create application user
 CREATE USER ebarmm_app WITH PASSWORD '${DB_PASSWORD}';
 
@@ -93,6 +115,8 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ebarmm_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ebarmm_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ebarmm_app;
 EOF
+    print_status "Database and user created"
+fi
 
 # Configure pg_hba.conf to allow Docker connections
 PG_HBA="/var/lib/pgsql/data/pg_hba.conf"
