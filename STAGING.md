@@ -502,13 +502,13 @@ CORS_ORIGINS=["http://YOUR_ELASTIC_IP"]
 
 ```bash
 cd ~/ebarmm/docker
-docker-compose -f docker-compose.staging.yml --env-file .env.staging up -d
+docker compose -f docker-compose.staging.yml --env-file .env.staging up -d
 ```
 
 Verify services are running:
 
 ```bash
-docker-compose -f docker-compose.staging.yml ps
+docker compose -f docker-compose.staging.yml ps
 ```
 
 ---
@@ -541,26 +541,26 @@ Default admin credentials:
 cd ~/ebarmm/docker
 
 # All services
-docker-compose -f docker-compose.staging.yml logs -f
+docker compose -f docker-compose.staging.yml logs -f
 
 # Specific service
-docker-compose -f docker-compose.staging.yml logs -f backend
+docker compose -f docker-compose.staging.yml logs -f backend
 ```
 
 ### Restart Services
 
 ```bash
 # Restart all
-docker-compose -f docker-compose.staging.yml restart
+docker compose -f docker-compose.staging.yml restart
 
 # Restart specific service
-docker-compose -f docker-compose.staging.yml restart backend
+docker compose -f docker-compose.staging.yml restart backend
 ```
 
 ### Stop Services
 
 ```bash
-docker-compose -f docker-compose.staging.yml down
+docker compose -f docker-compose.staging.yml down
 ```
 
 ### Update Deployment
@@ -570,8 +570,8 @@ cd ~/ebarmm
 git pull origin main
 
 cd docker
-docker-compose -f docker-compose.staging.yml build
-docker-compose -f docker-compose.staging.yml up -d
+docker compose -f docker-compose.staging.yml build
+docker compose -f docker-compose.staging.yml up -d
 ```
 
 ---
@@ -614,7 +614,7 @@ aws s3 cp ${BACKUP_DIR}/${FILENAME} s3://your-backup-bucket/postgres/
 sudo apt install -y certbot
 
 # Get certificate (stop frontend first)
-docker-compose -f docker-compose.staging.yml stop frontend
+docker compose -f docker-compose.staging.yml stop frontend
 sudo certbot certonly --standalone -d staging.yourdomain.com
 
 # Update nginx config to use certificates
@@ -652,14 +652,14 @@ aws s3 ls s3://ebarmm-staging-media/ --region ap-southeast-1
 
 Check environment variables:
 ```bash
-docker-compose -f docker-compose.staging.yml exec backend env | grep S3
+docker compose -f docker-compose.staging.yml exec backend env | grep S3
 ```
 
 ### Services won't start
 
 Check Docker logs:
 ```bash
-docker-compose -f docker-compose.staging.yml logs backend
+docker compose -f docker-compose.staging.yml logs backend
 ```
 
 Check disk space:
