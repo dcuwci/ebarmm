@@ -51,11 +51,10 @@ if sudo dnf list available | grep -q postgis; then
 fi
 
 # Initialize PostgreSQL (skip if already initialized)
-if [ -z "$(ls -A /var/lib/pgsql/data 2>/dev/null)" ]; then
-    sudo postgresql-setup --initdb
+if sudo postgresql-setup --initdb 2>/dev/null; then
     print_status "PostgreSQL initialized"
 else
-    print_warning "PostgreSQL data directory not empty, skipping initdb"
+    print_warning "PostgreSQL already initialized, skipping initdb"
 fi
 
 # Start and enable PostgreSQL
