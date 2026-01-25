@@ -61,7 +61,7 @@ export default function MediaGallery({ projectId, canDelete = true, isPublic = f
     if (isPublic) {
       return getPublicMediaFileUrl(item.media_id)
     }
-    return item.download_url
+    return item.download_url ?? undefined
   }
 
   // Delete mutation

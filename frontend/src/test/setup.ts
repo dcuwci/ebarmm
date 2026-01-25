@@ -29,7 +29,6 @@ class MockResizeObserver {
   disconnect = vi.fn()
 }
 
-// @ts-expect-error - global ResizeObserver mock
 globalThis.ResizeObserver = MockResizeObserver
 
 // Mock IntersectionObserver for lazy loading components
@@ -44,7 +43,6 @@ class MockIntersectionObserver {
   takeRecords = vi.fn(() => [])
 }
 
-// @ts-expect-error - global IntersectionObserver mock
 globalThis.IntersectionObserver = MockIntersectionObserver
 
 // Mock import.meta.env for tests

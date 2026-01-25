@@ -236,14 +236,15 @@ export default function Login() {
               Forgot password? Contact your system administrator
             </Typography>
 
-            <Button
-              variant="secondary"
-              fullWidth
-              onClick={() => navigate('/')}
-              sx={{ mt: 2 }}
-            >
-              Back to Home
-            </Button>
+            <Box sx={{ mt: 2 }}>
+              <Button
+                variant="secondary"
+                fullWidth
+                onClick={() => navigate('/')}
+              >
+                Back to Home
+              </Button>
+            </Box>
           </form>
         </Paper>
 
