@@ -374,7 +374,7 @@ export default function ProjectDetails() {
               Project Media
             </Typography>
             {Object.keys(project.media_counts).length > 0 ? (
-              <MediaGallery projectId={projectId!} canDelete={false} />
+              <MediaGallery projectId={projectId!} canDelete={false} isPublic={true} />
             ) : (
               <Box sx={{ textAlign: 'center', py: 8 }}>
                 <Image size={48} style={{ opacity: 0.3 }} />

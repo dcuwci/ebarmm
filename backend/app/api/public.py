@@ -3,7 +3,9 @@ Public API Endpoints
 Read-only public access for transparency portal (no authentication)
 """
 
+import io
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, case
 from typing import List, Optional
@@ -557,4 +559,142 @@ async def get_public_media_thumbnail(
         "media_type": media.media_type,
         "download_url": download_url,
         "project_id": str(media.project_id)
+    }
+
+
+@router.get("/media/{media_id}/file")
+async def get_public_media_file(
+    media_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    Stream media file publicly (no authentication).
+
+    Returns the actual file content for confirmed uploads from non-deleted projects.
+    Used by the public transparency portal to display images.
+    """
+    from ..api.media import s3_client
+    from ..core.config import settings
+    from ..services.thumbnail_service import get_cached_image
+    from botocore.exceptions import ClientError
+
+    media = db.query(MediaAsset).filter(MediaAsset.media_id == media_id).first()
+
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found")
+
+    # Check if project is public (not deleted)
+    project = db.query(Project).filter(Project.project_id == media.project_id).first()
+    if not project or project.status == 'deleted':
+        raise HTTPException(status_code=404, detail="Media not found")
+
+    # Check if upload is confirmed
+    if not media.attributes or media.attributes.get('status') != 'confirmed':
+        raise HTTPException(status_code=404, detail="Media not available")
+
+    try:
+        # Use cached image retrieval
+        result = get_cached_image(media.storage_key)
+
+        if result is None:
+            raise HTTPException(
+                status_code=404,
+                detail="File not found in storage"
+            )
+
+        image_data, content_type = result
+        content_type = media.mime_type or content_type
+
+        return StreamingResponse(
+            io.BytesIO(image_data),
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f"inline; filename=\"{media.attributes.get('filename', 'file') if media.attributes else 'file'}\"",
+                "Cache-Control": "public, max-age=3600"  # Cache for 1 hour
+            }
+        )
+    except HTTPException:
+        raise
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchKey':
+            raise HTTPException(
+                status_code=404,
+                detail="File not found in storage"
+            )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve file: {str(e)}"
+        )
+
+
+@router.get("/projects/{project_id}/media")
+async def get_public_project_media(
+    project_id: UUID,
+    media_type: Optional[str] = Query(None, regex=r'^(photo|video|document)$'),
+    limit: int = Query(default=50, le=200),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all media assets for a project (public, no authentication).
+
+    Returns list of media assets with download URLs for confirmed uploads.
+    """
+    from ..api.media import s3_client
+    from ..core.config import settings
+    from botocore.exceptions import ClientError
+
+    # Verify project exists and is not deleted
+    project = db.query(Project).filter(
+        Project.project_id == project_id,
+        Project.status != 'deleted'
+    ).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
+    # Query media assets
+    query = db.query(MediaAsset).filter(MediaAsset.project_id == project_id)
+
+    if media_type:
+        query = query.filter(MediaAsset.media_type == media_type)
+
+    # Only return confirmed uploads
+    query = query.filter(MediaAsset.attributes['status'].astext == 'confirmed')
+
+    media_assets = query.order_by(MediaAsset.uploaded_at.desc()).limit(limit).all()
+
+    # Generate download URLs for each asset
+    results = []
+    for media in media_assets:
+        try:
+            download_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': settings.S3_BUCKET,
+                    'Key': media.storage_key
+                },
+                ExpiresIn=3600
+            )
+        except ClientError:
+            download_url = None
+
+        results.append({
+            "media_id": str(media.media_id),
+            "project_id": str(media.project_id),
+            "media_type": media.media_type,
+            "download_url": download_url,
+            "latitude": media.latitude,
+            "longitude": media.longitude,
+            "uploaded_at": media.uploaded_at,
+            "filename": media.attributes.get('filename') if media.attributes else None,
+            "file_size": media.file_size,
+            "mime_type": media.mime_type
+        })
+
+    return {
+        "items": results,
+        "total": len(results)
     }

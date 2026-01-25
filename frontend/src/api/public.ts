@@ -5,6 +5,7 @@
 
 import { apiClient } from './client'
 import type { PublicProjectDetail, PublicStats, PublicProject } from '../types/project'
+import type { MediaAsset, MediaType } from '../types/media'
 
 export interface PublicProjectsResponse {
   total: number
@@ -89,4 +90,36 @@ export async function fetchAllPublicProjects(
     `/public/projects?${params.toString()}`
   )
   return data.items
+}
+
+export interface PublicMediaResponse {
+  items: MediaAsset[]
+  total: number
+}
+
+/**
+ * Fetch public media assets for a project (no authentication required)
+ */
+export async function fetchPublicProjectMedia(
+  projectId: string,
+  mediaType?: MediaType,
+  limit = 50
+): Promise<MediaAsset[]> {
+  const params: Record<string, unknown> = { limit }
+  if (mediaType) {
+    params.media_type = mediaType
+  }
+  const { data } = await apiClient.get<PublicMediaResponse>(
+    `/public/projects/${projectId}/media`,
+    { params }
+  )
+  return data.items
+}
+
+/**
+ * Get public media file URL (proxied through backend, no auth required)
+ */
+export function getPublicMediaFileUrl(mediaId: string): string {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+  return `${baseUrl}/public/media/${mediaId}/file`
 }

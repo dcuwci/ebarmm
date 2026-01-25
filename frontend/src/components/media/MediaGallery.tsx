@@ -32,27 +32,37 @@ import {
   ZoomIn,
 } from 'lucide-react'
 import { fetchProjectMedia, deleteMedia, formatFileSize } from '../../api/media'
+import { fetchPublicProjectMedia, getPublicMediaFileUrl } from '../../api/public'
 import { format } from 'date-fns'
 import type { MediaAsset, MediaType } from '../../types/media'
 
 interface MediaGalleryProps {
   projectId: string
   canDelete?: boolean
+  isPublic?: boolean
 }
 
 type FilterType = 'all' | MediaType
 
-export default function MediaGallery({ projectId, canDelete = true }: MediaGalleryProps) {
+export default function MediaGallery({ projectId, canDelete = true, isPublic = false }: MediaGalleryProps) {
   const queryClient = useQueryClient()
   const [selectedMedia, setSelectedMedia] = useState<MediaAsset | null>(null)
   const [selectedIndex, setSelectedIndex] = useState<number>(-1)
   const [filterType, setFilterType] = useState<FilterType>('all')
 
-  // Fetch media
+  // Fetch media - use public endpoint if isPublic
   const { data: media, isLoading, error } = useQuery({
-    queryKey: ['media', projectId],
-    queryFn: () => fetchProjectMedia(projectId),
+    queryKey: ['media', projectId, isPublic ? 'public' : 'auth'],
+    queryFn: () => isPublic ? fetchPublicProjectMedia(projectId) : fetchProjectMedia(projectId),
   })
+
+  // Helper to get display URL for media (use proxied URL for public access)
+  const getMediaDisplayUrl = (item: MediaAsset): string | undefined => {
+    if (isPublic) {
+      return getPublicMediaFileUrl(item.media_id)
+    }
+    return item.download_url
+  }
 
   // Delete mutation
   const deleteMutation = useMutation({
@@ -189,10 +199,10 @@ export default function MediaGallery({ projectId, canDelete = true }: MediaGalle
                   bgcolor: 'grey.100',
                 }}
               >
-                {item.media_type === 'photo' && item.download_url ? (
+                {item.media_type === 'photo' ? (
                   <Box
                     component="img"
-                    src={item.download_url}
+                    src={getMediaDisplayUrl(item)}
                     alt="Media"
                     sx={{
                       width: '100%',
@@ -322,17 +332,17 @@ export default function MediaGallery({ projectId, canDelete = true }: MediaGalle
                 p: 4,
               }}
             >
-              {selectedMedia.media_type === 'photo' && selectedMedia.download_url ? (
+              {selectedMedia.media_type === 'photo' ? (
                 <Box
                   component="img"
-                  src={selectedMedia.download_url}
+                  src={getMediaDisplayUrl(selectedMedia)}
                   alt="Media"
                   sx={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }}
                 />
-              ) : selectedMedia.media_type === 'video' && selectedMedia.download_url ? (
+              ) : selectedMedia.media_type === 'video' ? (
                 <Box
                   component="video"
-                  src={selectedMedia.download_url}
+                  src={getMediaDisplayUrl(selectedMedia)}
                   controls
                   sx={{ maxWidth: '100%', maxHeight: '70vh' }}
                 />
@@ -342,30 +352,28 @@ export default function MediaGallery({ projectId, canDelete = true }: MediaGalle
                   <Typography variant="h6" sx={{ mt: 2 }}>
                     {String(selectedMedia.attributes?.filename || 'Document')}
                   </Typography>
-                  {selectedMedia.download_url && (
-                    <Box
-                      component="a"
-                      href={selectedMedia.download_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      sx={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 1,
-                        mt: 2,
-                        px: 3,
-                        py: 1.5,
-                        bgcolor: 'primary.main',
-                        color: 'white',
-                        borderRadius: 1,
-                        textDecoration: 'none',
-                        '&:hover': { bgcolor: 'primary.dark' },
-                      }}
-                    >
-                      <Download size={18} />
-                      Download
-                    </Box>
-                  )}
+                  <Box
+                    component="a"
+                    href={getMediaDisplayUrl(selectedMedia)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    sx={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      mt: 2,
+                      px: 3,
+                      py: 1.5,
+                      bgcolor: 'primary.main',
+                      color: 'white',
+                      borderRadius: 1,
+                      textDecoration: 'none',
+                      '&:hover': { bgcolor: 'primary.dark' },
+                    }}
+                  >
+                    <Download size={18} />
+                    Download
+                  </Box>
                 </Box>
               )}
             </Box>
@@ -401,19 +409,17 @@ export default function MediaGallery({ projectId, canDelete = true }: MediaGalle
                 </Box>
 
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                  {selectedMedia.download_url && (
-                    <Tooltip title="Download">
-                      <IconButton
-                        component="a"
-                        href={selectedMedia.download_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        sx={{ color: 'white' }}
-                      >
-                        <Download size={20} />
-                      </IconButton>
-                    </Tooltip>
-                  )}
+                  <Tooltip title="Download">
+                    <IconButton
+                      component="a"
+                      href={getMediaDisplayUrl(selectedMedia)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      sx={{ color: 'white' }}
+                    >
+                      <Download size={20} />
+                    </IconButton>
+                  </Tooltip>
                   {canDelete && (
                     <Tooltip title="Delete">
                       <IconButton
