@@ -224,6 +224,25 @@ aws ec2 modify-instance-attribute --instance-id $INSTANCE_ID --disable-api-termi
 5. If you used a different bucket name, replace `ebarmm-staging-media` with your bucket name
 6. Click **Save changes**
 
+#### 2.4 Configure CORS (Required for uploads)
+
+1. Stay in the **Permissions** tab
+2. Scroll down to **Cross-origin resource sharing (CORS)** and click **Edit**
+3. Paste the following JSON:
+
+```json
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["GET", "PUT", "POST", "HEAD"],
+    "AllowedOrigins": ["*"],
+    "ExposeHeaders": ["ETag"]
+  }
+]
+```
+
+4. Click **Save changes**
+
 ### Option B: AWS CLI
 
 ```bash
@@ -253,6 +272,18 @@ aws s3api put-bucket-policy --bucket $BUCKET_NAME --policy '{
             "Resource": "arn:aws:s3:::'$BUCKET_NAME'/*"
         }
     ]
+}'
+
+# Add CORS configuration for uploads
+aws s3api put-bucket-cors --bucket $BUCKET_NAME --cors-configuration '{
+  "CORSRules": [
+    {
+      "AllowedHeaders": ["*"],
+      "AllowedMethods": ["GET", "PUT", "POST", "HEAD"],
+      "AllowedOrigins": ["*"],
+      "ExposeHeaders": ["ETag"]
+    }
+  ]
 }'
 
 echo "S3 bucket created: $BUCKET_NAME"
