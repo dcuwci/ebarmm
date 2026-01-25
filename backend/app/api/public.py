@@ -508,6 +508,67 @@ async def get_public_deos(
     }
 
 
+@router.get("/geotagged-media")
+async def get_public_geotagged_media(
+    project_id: Optional[UUID] = Query(None, description="Filter by project ID"),
+    limit: int = Query(default=100, le=500),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all geotagged photos for public map display (no authentication).
+
+    Returns photos that have GPS coordinates (latitude/longitude).
+    Only returns confirmed uploads from non-deleted projects.
+    """
+    from ..api.media import s3_client
+    from ..core.config import settings
+    from botocore.exceptions import ClientError
+
+    # Base query for confirmed photos with GPS coordinates
+    query = db.query(MediaAsset).join(
+        Project, MediaAsset.project_id == Project.project_id
+    ).filter(
+        and_(
+            MediaAsset.media_type == 'photo',
+            MediaAsset.latitude.isnot(None),
+            MediaAsset.longitude.isnot(None),
+            MediaAsset.attributes['status'].astext == 'confirmed',
+            Project.status != 'deleted'
+        )
+    )
+
+    # Filter by project if specified
+    if project_id:
+        query = query.filter(MediaAsset.project_id == project_id)
+
+    media_assets = query.order_by(MediaAsset.uploaded_at.desc()).limit(limit).all()
+
+    # Build response with project titles
+    results = []
+    for media in media_assets:
+        # Get project title
+        project = db.query(Project).filter(Project.project_id == media.project_id).first()
+        project_title = project.project_title if project else "Unknown Project"
+
+        # Get filename from attributes
+        filename = media.attributes.get('filename') if media.attributes else None
+
+        # Generate thumbnail URL using public endpoint
+        thumbnail_url = f"/api/v1/public/media/{media.media_id}/file"
+
+        results.append({
+            "media_id": str(media.media_id),
+            "project_id": str(media.project_id),
+            "project_title": project_title,
+            "latitude": media.latitude,
+            "longitude": media.longitude,
+            "thumbnail_url": thumbnail_url,
+            "filename": filename
+        })
+
+    return results
+
+
 @router.get("/media/{media_id}/thumbnail")
 async def get_public_media_thumbnail(
     media_id: UUID,

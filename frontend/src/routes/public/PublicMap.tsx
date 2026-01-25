@@ -25,7 +25,7 @@ import { TimelineSlider } from '../../components/map/TimelineSlider';
 import { LoadingSpinner, FilterButton } from '../../components/mui';
 import { useFilterStore } from '../../stores/filterStore';
 import { apiClient } from '../../api/client';
-import { fetchGeotaggedMedia } from '../../api/media';
+import { fetchPublicGeotaggedMedia } from '../../api/public';
 
 interface DEO {
   deo_id: number;
@@ -114,10 +114,10 @@ export default function PublicMap() {
     },
   });
 
-  // Fetch geotagged photos when toggle is enabled
+  // Fetch geotagged photos when toggle is enabled (public endpoint, no auth required)
   const { data: geotaggedPhotos = [], refetch: refetchPhotos } = useQuery({
-    queryKey: ['geotaggedMedia'],
-    queryFn: () => fetchGeotaggedMedia(undefined, 200),
+    queryKey: ['publicGeotaggedMedia'],
+    queryFn: () => fetchPublicGeotaggedMedia(undefined, 200),
     enabled: showPhotos,
     staleTime: 60 * 1000,
   });

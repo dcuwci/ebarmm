@@ -123,3 +123,36 @@ export function getPublicMediaFileUrl(mediaId: string): string {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
   return `${baseUrl}/public/media/${mediaId}/file`
 }
+
+export interface PublicGeotaggedMedia {
+  media_id: string
+  project_id: string
+  project_title: string
+  latitude: number
+  longitude: number
+  thumbnail_url: string
+  filename?: string
+}
+
+/**
+ * Fetch geotagged photos for public map display (no authentication required)
+ */
+export async function fetchPublicGeotaggedMedia(
+  projectId?: string,
+  limit = 100
+): Promise<PublicGeotaggedMedia[]> {
+  const params: Record<string, unknown> = { limit }
+  if (projectId) {
+    params.project_id = projectId
+  }
+  const { data } = await apiClient.get<PublicGeotaggedMedia[]>('/public/geotagged-media', { params })
+
+  // Convert relative thumbnail URLs to absolute URLs
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+  return data.map(item => ({
+    ...item,
+    thumbnail_url: item.thumbnail_url.startsWith('/')
+      ? `${baseUrl.replace('/api/v1', '')}${item.thumbnail_url}`
+      : item.thumbnail_url
+  }))
+}
