@@ -388,7 +388,15 @@ aws iam create-access-key --user-name ebarmm-staging-s3
 ssh -i "your-key.pem" ec2-user@YOUR_ELASTIC_IP
 ```
 
-### 4.2 Clone Repository
+### 4.2 Install Git
+
+Git is not installed by default on Amazon Linux 2023:
+
+```bash
+sudo dnf install -y git
+```
+
+### 4.3 Clone Repository
 
 ```bash
 cd ~
@@ -396,7 +404,7 @@ git clone https://github.com/YOUR_ORG/ebarmm.git
 cd ebarmm
 ```
 
-### 4.3 Run Setup Script
+### 4.4 Run Setup Script
 
 ```bash
 chmod +x scripts/setup-staging-ec2.sh
@@ -407,7 +415,7 @@ chmod +x scripts/setup-staging-ec2.sh
 - Database password (`DB_PASSWORD`)
 - JWT secret (`JWT_SECRET_KEY`)
 
-### 4.4 Log Out and Back In
+### 4.5 Log Out and Back In
 
 Required for Docker group permissions:
 
