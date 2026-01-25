@@ -235,6 +235,15 @@ export default function Login() {
             <Typography variant="body2" color="text.secondary" sx={{ mt: 3, textAlign: 'center' }}>
               Forgot password? Contact your system administrator
             </Typography>
+
+            <Button
+              variant="secondary"
+              fullWidth
+              onClick={() => navigate('/')}
+              sx={{ mt: 2 }}
+            >
+              Back to Home
+            </Button>
           </form>
         </Paper>
 
