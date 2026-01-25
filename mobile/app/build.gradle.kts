@@ -21,13 +21,29 @@ android {
             useSupportLibrary = true
         }
 
-        // For emulator: "http://10.0.2.2:8000"
-        // For physical device: "http://YOUR_PC_IP:8000" (e.g., "http://192.168.1.100:8000")
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000\"")
     }
 
     buildTypes {
+        debug {
+            // Local development - emulator connects to host machine
+            // For physical device on local network, use your PC's IP (e.g., "http://192.168.1.100:8000")
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000\"")
+            isDebuggable = true
+        }
+
+        create("staging") {
+            // Staging server - update with your EC2 Elastic IP
+            // Example: "http://54.123.45.67:8000"
+            buildConfigField("String", "API_BASE_URL", "\"http://STAGING_SERVER_IP:8000\"")
+            initWith(getByName("debug"))
+            isDebuggable = true
+            applicationIdSuffix = ".staging"
+            versionNameSuffix = "-staging"
+        }
+
         release {
+            // Production server - update with your production domain
+            buildConfigField("String", "API_BASE_URL", "\"https://api.yourdomain.com\"")
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

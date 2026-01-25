@@ -439,6 +439,61 @@ To reduce costs:
 
 ---
 
+## Mobile App Testing
+
+The mobile app has build variants for different environments.
+
+### Configure Staging URL
+
+Edit `mobile/app/build.gradle.kts` and update the staging server IP:
+
+```kotlin
+create("staging") {
+    buildConfigField("String", "API_BASE_URL", "\"http://YOUR_ELASTIC_IP:8000\"")
+    // ...
+}
+```
+
+### Build Variants
+
+| Variant | Command | API Target |
+|---------|---------|------------|
+| Debug | `./gradlew assembleDebug` | Local (`10.0.2.2:8000`) |
+| Staging | `./gradlew assembleStaging` | Staging server |
+| Release | `./gradlew assembleRelease` | Production |
+
+### Build Staging APK
+
+```bash
+cd mobile
+
+# Update staging IP in build.gradle.kts first, then:
+./gradlew clean assembleStaging
+
+# APK location:
+# mobile/app/build/outputs/apk/staging/app-staging.apk
+```
+
+### Install on Device/Emulator
+
+```bash
+# Via ADB
+adb install app/build/outputs/apk/staging/app-staging.apk
+
+# Or open in Android Studio and select "staging" build variant
+```
+
+### Testing Checklist
+
+- [ ] Login works with staging credentials
+- [ ] Projects list loads
+- [ ] Map displays correctly
+- [ ] Photo upload works (saved to S3)
+- [ ] Offline mode queues data correctly
+- [ ] Sync works when back online
+
+---
+
 ## Security Checklist
 
 - [ ] Change default admin password
