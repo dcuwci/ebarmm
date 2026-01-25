@@ -3,7 +3,7 @@ Authentication API Endpoints
 Login, logout, token management, MFA
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
@@ -20,8 +20,11 @@ from ..schemas import (
     MFADisableRequest, MFAStatusResponse, TokenRefreshRequest
 )
 from ..services.mfa_service import MFAService
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_PREFIX}/auth/login")
 
@@ -206,7 +209,9 @@ def _generate_tokens(user: User, db: Session) -> dict:
 
 
 @router.post("/login-json", response_model=LoginResponse)
+@limiter.limit("5/minute")
 async def login_json(
+    request: Request,
     credentials: LoginRequest,
     db: Session = Depends(get_db)
 ):
@@ -215,6 +220,8 @@ async def login_json(
 
     Accepts JSON body with username and password.
     If MFA is enabled for the user, returns mfa_required=true with a session token.
+
+    Rate limited: 5 requests per minute per IP.
     """
     user = authenticate_user(db, credentials.username, credentials.password)
 
@@ -274,7 +281,9 @@ async def login_json(
 
 
 @router.post("/login", response_model=LoginResponse)
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
@@ -283,6 +292,8 @@ async def login(
 
     OAuth2 compatible endpoint (username/password form).
     If MFA is enabled for the user, returns mfa_required=true with a session token.
+
+    Rate limited: 5 requests per minute per IP.
     """
     user = authenticate_user(db, form_data.username, form_data.password)
 

@@ -4,7 +4,7 @@ Read-only public access for transparency portal (no authentication)
 """
 
 import io
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, case
@@ -16,12 +16,17 @@ import json
 from ..core.database import get_db
 from ..models import Project, DEO, GISFeature, ProjectProgressLog, MediaAsset
 from ..schemas import PublicProjectResponse, PublicStatsResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/projects", response_model=dict)
+@limiter.limit("60/minute")
 async def get_public_projects(
+    request: Request,
     deo_id: Optional[int] = None,
     fund_year: Optional[int] = None,
     status: Optional[str] = Query(None, regex=r'^(planning|ongoing|completed|suspended)$'),
@@ -143,7 +148,9 @@ async def get_public_projects(
 
 
 @router.get("/projects/{project_id}")
+@limiter.limit("120/minute")
 async def get_public_project(
+    request: Request,
     project_id: UUID,
     db: Session = Depends(get_db)
 ):
@@ -151,6 +158,8 @@ async def get_public_project(
     Get public project details.
 
     Returns full project information with progress history and media count.
+
+    Rate limited: 120 requests per minute per IP.
     """
     project = db.query(Project).filter(
         Project.project_id == project_id,
@@ -217,7 +226,9 @@ async def get_public_project(
 
 
 @router.get("/map")
+@limiter.limit("60/minute")
 async def get_public_map_features(
+    request: Request,
     project_id: Optional[UUID] = None,
     deo_id: Optional[int] = None,
     feature_type: Optional[str] = None,
@@ -229,6 +240,8 @@ async def get_public_map_features(
     Get GIS features for public map (no authentication).
 
     Returns GeoJSON FeatureCollection with project info in properties.
+
+    Rate limited: 60 requests per minute per IP.
 
     Query parameters:
     - project_id: Filter by specific project
@@ -629,7 +642,9 @@ async def get_public_media_thumbnail(
 
 
 @router.get("/media/{media_id}/file")
+@limiter.limit("100/minute")
 async def get_public_media_file(
+    request: Request,
     media_id: UUID,
     db: Session = Depends(get_db)
 ):
@@ -638,6 +653,8 @@ async def get_public_media_file(
 
     Returns the actual file content for confirmed uploads from non-deleted projects.
     Used by the public transparency portal to display images.
+
+    Rate limited: 100 requests per minute per IP.
     """
     from ..api.media import s3_client
     from ..core.config import settings

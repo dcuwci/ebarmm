@@ -4,7 +4,7 @@ S3 pre-signed URLs for file upload, storage metadata
 """
 
 import io
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
@@ -33,8 +33,11 @@ from ..services.thumbnail_service import (
     get_cached_image,
     get_thumbnail_key
 )
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 # Initialize S3 client
 s3_client = boto3.client(
@@ -49,8 +52,10 @@ s3_client = boto3.client(
 
 
 @router.post("/upload-url", response_model=MediaUploadUrlResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("30/minute")
 async def request_upload_url(
-    request: MediaUploadUrlRequest,
+    request: Request,
+    upload_request: MediaUploadUrlRequest,
     current_user: User = Depends(require_role(['deo_user', 'regional_admin', 'super_admin'])),
     db: Session = Depends(get_db)
 ):
@@ -64,9 +69,11 @@ async def request_upload_url(
     - deo_user: Can only upload for their own DEO's projects
     - regional_admin: Can upload for projects in their region
     - super_admin: Can upload for any project
+
+    Rate limited: 30 requests per minute per IP.
     """
     # Verify project exists and user has access
-    project = db.query(Project).filter(Project.project_id == request.project_id).first()
+    project = db.query(Project).filter(Project.project_id == upload_request.project_id).first()
 
     if not project:
         raise HTTPException(
@@ -83,23 +90,23 @@ async def request_upload_url(
 
     # Validate file type
     allowed_types = []
-    if request.media_type == 'photo':
+    if upload_request.media_type == 'photo':
         allowed_types = settings.ALLOWED_IMAGE_TYPES
-    elif request.media_type == 'video':
+    elif upload_request.media_type == 'video':
         allowed_types = settings.ALLOWED_VIDEO_TYPES
-    elif request.media_type == 'document':
+    elif upload_request.media_type == 'document':
         allowed_types = settings.ALLOWED_DOCUMENT_TYPES
 
-    if request.content_type not in allowed_types:
+    if upload_request.content_type not in allowed_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Content type {request.content_type} not allowed for {request.media_type}. Allowed: {allowed_types}"
+            detail=f"Content type {upload_request.content_type} not allowed for {upload_request.media_type}. Allowed: {allowed_types}"
         )
 
     # Generate unique storage key
     media_id = uuid.uuid4()
-    file_extension = request.filename.split('.')[-1] if '.' in request.filename else ''
-    storage_key = f"{request.media_type}s/{request.project_id}/{media_id}.{file_extension}"
+    file_extension = upload_request.filename.split('.')[-1] if '.' in upload_request.filename else ''
+    storage_key = f"{upload_request.media_type}s/{upload_request.project_id}/{media_id}.{file_extension}"
 
     # Generate pre-signed upload URL (expires in 15 minutes)
     try:
@@ -108,7 +115,7 @@ async def request_upload_url(
             Params={
                 'Bucket': settings.S3_BUCKET,
                 'Key': storage_key,
-                'ContentType': request.content_type
+                'ContentType': upload_request.content_type
             },
             ExpiresIn=900  # 15 minutes
         )
@@ -121,19 +128,19 @@ async def request_upload_url(
     # Create pending media asset record
     new_media = MediaAsset(
         media_id=media_id,
-        project_id=request.project_id,
-        media_type=request.media_type,
+        project_id=upload_request.project_id,
+        media_type=upload_request.media_type,
         storage_key=storage_key,
-        latitude=request.latitude,
-        longitude=request.longitude,
+        latitude=upload_request.latitude,
+        longitude=upload_request.longitude,
         uploaded_by=current_user.user_id,
         uploaded_at=datetime.utcnow(),
         attributes={
-            'filename': request.filename,
+            'filename': upload_request.filename,
             'status': 'pending',
-            'content_type': request.content_type
+            'content_type': upload_request.content_type
         },
-        mime_type=request.content_type
+        mime_type=upload_request.content_type
     )
 
     db.add(new_media)
