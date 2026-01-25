@@ -2,8 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-<!-- Last reviewed: 2026-01-24 -->
-<!-- Last updated: 2026-01-24 -->
+<!-- Last reviewed: 2026-01-25 -->
+<!-- Last updated: 2026-01-25 -->
 
 ## Quick Commands
 
@@ -41,13 +41,26 @@ docker-compose logs -f backend          # View service logs
 docker-compose down                     # Stop all
 ```
 
+### Staging (AWS EC2)
+```bash
+# On EC2 instance
+cd ~/ebarmm/docker
+docker-compose -f docker-compose.staging.yml --env-file .env.staging up -d    # Start staging
+docker-compose -f docker-compose.staging.yml logs -f backend                   # View logs
+docker-compose -f docker-compose.staging.yml down                              # Stop all
+```
+See `STAGING.md` for full AWS setup guide.
+
 ### Mobile (Android)
 ```bash
 cd mobile
 ./gradlew.bat clean assembleDebug       # Build debug APK (Windows)
+./gradlew.bat clean assembleStaging     # Build staging APK (Windows)
 ./gradlew clean assembleDebug           # Build debug APK (Linux/Mac)
+./gradlew clean assembleStaging         # Build staging APK (Linux/Mac)
 ```
-Or open `mobile/` folder in Android Studio and click Run.
+Build variants: `debug` (local), `staging` (AWS), `release` (production).
+Or open `mobile/` folder in Android Studio and select build variant.
 
 ## Architecture
 
@@ -179,7 +192,7 @@ mobile/app/src/main/java/com/barmm/ebarmm/
 
 **Immutable Progress Logs**: Append-only with SHA-256 hash chaining; database triggers prevent UPDATE/DELETE
 
-**File Storage**: MinIO (S3-compatible) on port 9000, bucket `ebarmm-media`
+**File Storage**: MinIO (S3-compatible) on port 9000, bucket `ebarmm-media`; AWS S3 for staging/production
 
 **GIS**: PostGIS for spatial data, Leaflet + react-leaflet for rendering
 
@@ -232,3 +245,4 @@ mobile/app/src/main/java/com/barmm/ebarmm/
 | `DATABASE_MAPPING.md` | Database schema reference |
 | `SECURITY.md` | Security implementation details |
 | `MIGRATION.md` | Database migration instructions |
+| `STAGING.md` | AWS staging environment setup guide |
