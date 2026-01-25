@@ -76,24 +76,6 @@ INSERT INTO gis_features (feature_id, project_id, feature_type, geometry, attrib
 ON CONFLICT (feature_id) DO NOTHING;
 
 -- =============================================================================
--- MEDIA ASSETS
--- Note: These reference files in MinIO storage. Files must be restored separately.
--- =============================================================================
-
-INSERT INTO media_assets (media_id, project_id, media_type, storage_key, latitude, longitude, captured_at, uploaded_by, uploaded_at, attributes, file_size, mime_type) VALUES
-('d6720604-5d5e-4a96-839d-6f6de9d8eb08', 'ef4746e0-af00-4d29-8cb0-628070f3f109', 'photo',
-  'photos/ef4746e0-af00-4d29-8cb0-628070f3f109/d6720604-5d5e-4a96-839d-6f6de9d8eb08.jpg',
-  6.0035111, 120.9436826, NULL, '473708ff-b560-4f13-a091-f3998ddfd1a2', '2026-01-23 08:30:02.865744',
-  '{"status": "confirmed", "filename": "geophoto.285996.Sta. 500_29042022_102413.jpg", "confirmed_at": "2026-01-23T08:30:03.107491", "content_type": "image/jpeg"}'::jsonb,
-  4228346, 'image/jpeg'),
-('36f65f97-1658-4915-9a78-04cef5e0a576', 'ef4746e0-af00-4d29-8cb0-628070f3f109', 'photo',
-  'photos/ef4746e0-af00-4d29-8cb0-628070f3f109/36f65f97-1658-4915-9a78-04cef5e0a576.jpg',
-  6.0061682, 120.9455423, NULL, '473708ff-b560-4f13-a091-f3998ddfd1a2', '2026-01-23 08:30:02.811015',
-  '{"status": "confirmed", "filename": "geophoto.285966.29042022_101733.jpg", "confirmed_at": "2026-01-23T08:30:03.037147", "content_type": "image/jpeg"}'::jsonb,
-  3723509, 'image/jpeg')
-ON CONFLICT (media_id) DO NOTHING;
-
--- =============================================================================
 -- PROJECT PROGRESS LOGS
 -- =============================================================================
 
@@ -119,13 +101,10 @@ SET session_replication_role = DEFAULT;
 --   1. Ensure base seed data (03_seed_data.sql) is loaded first
 --   2. Run: psql -U ebarmm_app -d ebarmm -f 05_demo_data.sql
 --
--- For media files:
---   - Media assets reference files stored in MinIO
---   - To restore media, copy files to MinIO bucket 'ebarmm-media'
---   - Or re-upload photos through the application
---
 -- User IDs referenced:
 --   - 473708ff-b560-4f13-a091-f3998ddfd1a2 (admin or deo_user_1)
 --   - 593e33f6-60a1-4480-9451-c62d92b7cecb (deo_user)
 --   - f10855fc-66e2-46be-8443-5ba7cfe3b676 (deo_user)
+--
+-- Photos can be uploaded manually through the application.
 --
