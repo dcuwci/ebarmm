@@ -152,6 +152,11 @@ print_status "Git installed"
 echo ""
 echo "Step 7: Setting up backup system..."
 
+# Install cronie for crontab (not installed by default on Amazon Linux 2023)
+sudo dnf install -y cronie
+sudo systemctl enable crond
+sudo systemctl start crond
+
 sudo mkdir -p /backups
 sudo chown ec2-user:ec2-user /backups
 
