@@ -6,6 +6,7 @@
 import { apiClient } from './client'
 import type { PublicProjectDetail, PublicStats, PublicProject } from '../types/project'
 import type { MediaAsset, MediaType } from '../types/media'
+import type { GeoJSONFeatureCollection } from '../types/gis'
 
 export interface PublicProjectsResponse {
   total: number
@@ -155,4 +156,16 @@ export async function fetchPublicGeotaggedMedia(
       ? `${baseUrl.replace('/api/v1', '')}${item.thumbnail_url}`
       : item.thumbnail_url
   }))
+}
+
+/**
+ * Fetch GIS features for a project (public, no authentication required)
+ */
+export async function fetchPublicGISFeatures(
+  projectId: string
+): Promise<GeoJSONFeatureCollection> {
+  const { data } = await apiClient.get<GeoJSONFeatureCollection>('/public/map', {
+    params: { project_id: projectId }
+  })
+  return data
 }

@@ -218,6 +218,7 @@ async def get_public_project(
 
 @router.get("/map")
 async def get_public_map_features(
+    project_id: Optional[UUID] = None,
     deo_id: Optional[int] = None,
     feature_type: Optional[str] = None,
     bbox: Optional[str] = Query(None, description="Bounding box: minLon,minLat,maxLon,maxLat"),
@@ -230,6 +231,7 @@ async def get_public_map_features(
     Returns GeoJSON FeatureCollection with project info in properties.
 
     Query parameters:
+    - project_id: Filter by specific project
     - deo_id: Filter by DEO
     - feature_type: Filter by type (road, bridge, etc.)
     - bbox: Bounding box filter
@@ -243,6 +245,9 @@ async def get_public_map_features(
     )
 
     # Filters
+    if project_id:
+        query = query.filter(GISFeature.project_id == project_id)
+
     if deo_id:
         query = query.filter(Project.deo_id == deo_id)
 

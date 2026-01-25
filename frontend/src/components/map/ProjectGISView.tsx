@@ -21,12 +21,14 @@ import {
 } from 'lucide-react'
 import { fetchGISFeaturesGeoJSON, FEATURE_TYPE_LABELS, FEATURE_TYPE_COLORS } from '../../api/gis'
 import { fetchGeotaggedMedia } from '../../api/media'
+import { fetchPublicGISFeatures, fetchPublicGeotaggedMedia } from '../../api/public'
 import { PhotoMarkers } from './PhotoMarkers'
 import type { FeatureType } from '../../types/gis'
 import 'leaflet/dist/leaflet.css'
 
 interface ProjectGISViewProps {
   projectId: string
+  isPublic?: boolean
 }
 
 // Component to fit bounds to features
@@ -47,17 +49,17 @@ function FitBounds({ features }: { features: GeoJSON.FeatureCollection }) {
   return null
 }
 
-export default function ProjectGISView({ projectId }: ProjectGISViewProps) {
-  // Fetch GIS features
+export default function ProjectGISView({ projectId, isPublic = false }: ProjectGISViewProps) {
+  // Fetch GIS features (use public or authenticated endpoint based on isPublic prop)
   const { data: features, isLoading, error } = useQuery({
-    queryKey: ['gis-features', projectId],
-    queryFn: () => fetchGISFeaturesGeoJSON(projectId),
+    queryKey: ['gis-features', projectId, isPublic],
+    queryFn: () => isPublic ? fetchPublicGISFeatures(projectId) : fetchGISFeaturesGeoJSON(projectId),
   })
 
-  // Fetch geotagged photos for this project
+  // Fetch geotagged photos for this project (use public or authenticated endpoint)
   const { data: geotaggedPhotos = [] } = useQuery({
-    queryKey: ['geotaggedMedia', projectId],
-    queryFn: () => fetchGeotaggedMedia(projectId),
+    queryKey: ['geotaggedMedia', projectId, isPublic],
+    queryFn: () => isPublic ? fetchPublicGeotaggedMedia(projectId) : fetchGeotaggedMedia(projectId),
     staleTime: 60 * 1000,
   })
 
@@ -153,32 +155,36 @@ export default function ProjectGISView({ projectId }: ProjectGISViewProps) {
       <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
         <MapIcon size={48} style={{ opacity: 0.5, marginBottom: 12 }} />
         <Typography>No GIS features mapped yet.</Typography>
-        <Typography variant="body2" sx={{ mt: 1 }}>
-          Add geographic features to visualize the project on the map.
-        </Typography>
-        <Link
-          to={`/admin/projects/${projectId}/gis`}
-          style={{ textDecoration: 'none' }}
-        >
-          <Box
-            component="span"
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 1,
-              mt: 2,
-              px: 3,
-              py: 1,
-              bgcolor: 'primary.main',
-              color: 'white',
-              borderRadius: 1,
-              '&:hover': { bgcolor: 'primary.dark' },
-            }}
-          >
-            <Edit3 size={18} />
-            Open GIS Editor
-          </Box>
-        </Link>
+        {!isPublic && (
+          <>
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              Add geographic features to visualize the project on the map.
+            </Typography>
+            <Link
+              to={`/admin/projects/${projectId}/gis`}
+              style={{ textDecoration: 'none' }}
+            >
+              <Box
+                component="span"
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  mt: 2,
+                  px: 3,
+                  py: 1,
+                  bgcolor: 'primary.main',
+                  color: 'white',
+                  borderRadius: 1,
+                  '&:hover': { bgcolor: 'primary.dark' },
+                }}
+              >
+                <Edit3 size={18} />
+                Open GIS Editor
+              </Box>
+            </Link>
+          </>
+        )}
       </Box>
     )
   }

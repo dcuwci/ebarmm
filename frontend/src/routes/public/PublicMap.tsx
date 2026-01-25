@@ -5,6 +5,7 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -18,6 +19,10 @@ import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Collapse from '@mui/material/Collapse';
 import Tooltip from '@mui/material/Tooltip';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
 import { Search, Filter, X, RefreshCw, Camera } from 'lucide-react';
 import { LeafletMap } from '../../components/map/LeafletMap';
 import { PhotoMarkers } from '../../components/map/PhotoMarkers';
@@ -66,7 +71,15 @@ interface ProjectsResponse {
 }
 
 export default function PublicMap() {
+  const navigate = useNavigate();
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>();
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    project: { project_id: string; project_title: string } | null;
+  }>({
+    open: false,
+    project: null,
+  });
 
   // Filter state - persisted globally via Zustand store (shared with Dashboard/Projects)
   const {
@@ -203,8 +216,20 @@ export default function PublicMap() {
     );
   }, [showPhotos, geotaggedPhotos, filteredProjects, selectedDEOs, selectedStatuses, selectedFundYears, sliderYear, selectedProvinces, selectedFundSources, selectedModes, selectedScales]);
 
-  const handleProjectSelect = (project: { project_id: string }) => {
+  const handleProjectSelect = (project: { project_id: string; project_title: string }) => {
     setSelectedProjectId(project.project_id);
+    setConfirmDialog({ open: true, project });
+  };
+
+  const handleConfirmNavigation = () => {
+    if (confirmDialog.project) {
+      navigate(`/portal/projects/${confirmDialog.project.project_id}`);
+    }
+    setConfirmDialog({ open: false, project: null });
+  };
+
+  const handleCancelNavigation = () => {
+    setConfirmDialog({ open: false, project: null });
   };
 
   const handleRefresh = useCallback(() => {
@@ -548,6 +573,30 @@ export default function PublicMap() {
           />
         </Box>
       )}
+
+      {/* Navigation Confirmation Dialog */}
+      <Dialog
+        open={confirmDialog.open}
+        onClose={handleCancelNavigation}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>View Project Details</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Do you want to view the details for{' '}
+            <strong>{confirmDialog.project?.project_title}</strong>?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelNavigation} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmNavigation} variant="contained" autoFocus>
+            View Details
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

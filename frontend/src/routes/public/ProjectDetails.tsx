@@ -393,9 +393,7 @@ export default function ProjectDetails() {
               Project Location
             </Typography>
             {project.gis_feature_count > 0 ? (
-              <Box sx={{ height: 400, borderRadius: 1, overflow: 'hidden' }}>
-                <ProjectGISView projectId={projectId!} />
-              </Box>
+              <ProjectGISView projectId={projectId!} isPublic={true} />
             ) : (
               <Box sx={{ textAlign: 'center', py: 8 }}>
                 <Map size={48} style={{ opacity: 0.3 }} />
