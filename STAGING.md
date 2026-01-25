@@ -438,6 +438,19 @@ sudo -u postgres psql ebarmm < database/03_seed_data.sql
 sudo -u postgres psql ebarmm < database/04_user_management.sql
 ```
 
+### 5.1 Load Demo Data (Optional)
+
+To load sample projects with GIS features for testing:
+
+```bash
+sudo -u postgres psql ebarmm < database/05_demo_data.sql
+```
+
+This includes:
+- 4 sample projects (Cotabato City, Lanao, Maguindanao, Parang)
+- 12 GIS road features with real BARMM coordinates
+- Sample progress log entries
+
 ---
 
 ## Step 6: Configure Environment
