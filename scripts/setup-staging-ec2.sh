@@ -45,6 +45,13 @@ print_status "System updated"
 echo ""
 echo "Step 2: Installing PostgreSQL 15 + PostGIS..."
 
+# Add PostgreSQL official apt repository (Ubuntu default repos may not have PG 15)
+sudo apt install -y curl ca-certificates
+sudo install -d /usr/share/postgresql-common/pgdg
+sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+sudo apt update
+
 # Install PostgreSQL and PostGIS
 sudo apt install -y postgresql-15 postgresql-15-postgis-3 postgresql-contrib-15
 
