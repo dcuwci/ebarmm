@@ -57,8 +57,8 @@ EC2 Instance (t3.medium)
    - **Name:** `ebarmm-staging`
 
    **Application and OS Images (AMI):**
-   - Click **Amazon Linux** (should be selected by default)
-   - Select **Amazon Linux 2023 AMI** (Free tier eligible)
+   - Click **Ubuntu** in the Quick Start tabs
+   - Select **Ubuntu Server 22.04 LTS** or **Ubuntu Server 24.04 LTS** (Free tier eligible)
 
    **Instance type:**
    - Select **t3.medium** (2 vCPU, 4 GB RAM)
@@ -134,10 +134,10 @@ aws ec2 authorize-security-group-ingress --group-id $SG_ID \
 aws ec2 authorize-security-group-ingress --group-id $SG_ID \
   --protocol tcp --port 443 --cidr 0.0.0.0/0
 
-# Get latest Amazon Linux 2023 AMI
+# Get latest Ubuntu 22.04 LTS AMI
 AMI_ID=$(aws ec2 describe-images \
-  --owners amazon \
-  --filters "Name=name,Values=al2023-ami-2023*-x86_64" \
+  --owners 099720109477 \
+  --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*" \
   --query 'Images | sort_by(@, &CreationDate) | [-1].ImageId' \
   --output text)
 
@@ -147,7 +147,7 @@ INSTANCE_ID=$(aws ec2 run-instances \
   --instance-type t3.medium \
   --key-name ebarmm-staging-key \
   --security-group-ids $SG_ID \
-  --block-device-mappings '[{"DeviceName":"/dev/xvda","Ebs":{"VolumeSize":30,"VolumeType":"gp3"}}]' \
+  --block-device-mappings '[{"DeviceName":"/dev/sda1","Ebs":{"VolumeSize":30,"VolumeType":"gp3"}}]' \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=ebarmm-staging}]' \
   --query 'Instances[0].InstanceId' --output text)
 
@@ -385,15 +385,15 @@ aws iam create-access-key --user-name ebarmm-staging-s3
 ### 4.1 Connect to EC2
 
 ```bash
-ssh -i "your-key.pem" ec2-user@YOUR_ELASTIC_IP
+ssh -i "your-key.pem" ubuntu@YOUR_ELASTIC_IP
 ```
 
-### 4.2 Install Git
+### 4.2 Install Git (if needed)
 
-Git is not installed by default on Amazon Linux 2023:
+Git is typically pre-installed on Ubuntu. If not:
 
 ```bash
-sudo dnf install -y git
+sudo apt install -y git
 ```
 
 ### 4.3 Clone Repository
@@ -421,7 +421,7 @@ Required for Docker group permissions:
 
 ```bash
 exit
-ssh -i "your-key.pem" ec2-user@YOUR_ELASTIC_IP
+ssh -i "your-key.pem" ubuntu@YOUR_ELASTIC_IP
 ```
 
 ---
@@ -597,7 +597,7 @@ gunzip -c /backups/ebarmm_YYYYMMDD_HHMMSS.sql.gz | sudo -u postgres psql ebarmm
 
 ### Upload Backups to S3 (Optional)
 
-Edit `/home/ec2-user/backup-postgres.sh` and uncomment the S3 upload line:
+Edit `/home/ubuntu/backup-postgres.sh` and uncomment the S3 upload line:
 
 ```bash
 aws s3 cp ${BACKUP_DIR}/${FILENAME} s3://your-backup-bucket/postgres/
@@ -611,7 +611,7 @@ aws s3 cp ${BACKUP_DIR}/${FILENAME} s3://your-backup-bucket/postgres/
 
 ```bash
 # Install certbot
-sudo dnf install -y certbot
+sudo apt install -y certbot
 
 # Get certificate (stop frontend first)
 docker-compose -f docker-compose.staging.yml stop frontend
@@ -634,7 +634,7 @@ sudo systemctl status postgresql
 
 Check pg_hba.conf allows Docker connections:
 ```bash
-sudo cat /var/lib/pgsql/data/pg_hba.conf | grep 172.17
+sudo cat /etc/postgresql/15/main/pg_hba.conf | grep 172.17
 ```
 
 Should show:
@@ -672,7 +672,7 @@ df -h
 Re-login for Docker group:
 ```bash
 exit
-ssh -i "your-key.pem" ec2-user@YOUR_ELASTIC_IP
+ssh -i "your-key.pem" ubuntu@YOUR_ELASTIC_IP
 ```
 
 ---

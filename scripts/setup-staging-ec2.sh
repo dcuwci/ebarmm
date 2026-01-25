@@ -1,7 +1,7 @@
 #!/bin/bash
 # =============================================================================
 # E-BARMM Staging Environment Setup Script
-# Run this on a fresh Amazon Linux 2023 EC2 instance
+# Run this on a fresh Ubuntu 22.04/24.04 LTS EC2 instance
 # =============================================================================
 
 set -e  # Exit on error
@@ -28,12 +28,15 @@ print_error() {
     echo -e "${RED}[✗]${NC} $1"
 }
 
+# Detect the current user (ubuntu on Ubuntu EC2)
+CURRENT_USER=$(whoami)
+
 # =============================================================================
 # 1. System Update
 # =============================================================================
 echo ""
 echo "Step 1: Updating system packages..."
-sudo dnf update -y
+sudo apt update && sudo apt upgrade -y
 print_status "System updated"
 
 # =============================================================================
@@ -42,26 +45,14 @@ print_status "System updated"
 echo ""
 echo "Step 2: Installing PostgreSQL 15 + PostGIS..."
 
-# Install PostgreSQL
-sudo dnf install -y postgresql15-server postgresql15-contrib
+# Install PostgreSQL and PostGIS
+sudo apt install -y postgresql-15 postgresql-15-postgis-3 postgresql-contrib-15
 
-# Check if PostGIS is available, install if possible
-if sudo dnf list available | grep -q postgis; then
-    sudo dnf install -y postgis34_15 || print_warning "PostGIS package not found, will install extensions manually"
-fi
-
-# Initialize PostgreSQL (skip if already initialized)
-if sudo postgresql-setup --initdb 2>/dev/null; then
-    print_status "PostgreSQL initialized"
-else
-    print_warning "PostgreSQL already initialized, skipping initdb"
-fi
-
-# Start and enable PostgreSQL
+# PostgreSQL should auto-start on Ubuntu, but ensure it's running
 sudo systemctl start postgresql
 sudo systemctl enable postgresql
 
-print_status "PostgreSQL 15 installed and running"
+print_status "PostgreSQL 15 + PostGIS installed and running"
 
 # =============================================================================
 # 3. Configure PostgreSQL
@@ -103,9 +94,8 @@ CREATE DATABASE ebarmm OWNER ebarmm_app;
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
--- PostGIS (if available)
 CREATE EXTENSION IF NOT EXISTS "postgis";
+CREATE EXTENSION IF NOT EXISTS "postgis_topology";
 
 -- Grant privileges
 GRANT ALL PRIVILEGES ON DATABASE ebarmm TO ebarmm_app;
@@ -118,7 +108,7 @@ EOF
 fi
 
 # Configure pg_hba.conf to allow Docker connections
-PG_HBA="/var/lib/pgsql/data/pg_hba.conf"
+PG_HBA="/etc/postgresql/15/main/pg_hba.conf"
 sudo cp $PG_HBA ${PG_HBA}.backup
 
 # Add Docker network access
@@ -126,7 +116,7 @@ echo "# Docker network access" | sudo tee -a $PG_HBA
 echo "host    all    ebarmm_app    172.17.0.0/16    scram-sha-256" | sudo tee -a $PG_HBA
 
 # Configure postgresql.conf to listen on Docker interface
-PG_CONF="/var/lib/pgsql/data/postgresql.conf"
+PG_CONF="/etc/postgresql/15/main/postgresql.conf"
 sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = 'localhost,172.17.0.1'/" $PG_CONF
 
 # Restart PostgreSQL to apply changes
@@ -141,50 +131,52 @@ print_status "Database password: ${DB_PASSWORD} (save this!)"
 echo ""
 echo "Step 4: Installing Docker..."
 
-sudo dnf install -y docker
+# Install Docker using official method
+sudo apt install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
 sudo systemctl start docker
 sudo systemctl enable docker
-sudo usermod -aG docker ec2-user
+sudo usermod -aG docker $CURRENT_USER
 
 print_status "Docker installed"
 
 # =============================================================================
-# 5. Install Docker Compose
+# 5. Install Git (usually pre-installed on Ubuntu)
 # =============================================================================
 echo ""
-echo "Step 5: Installing Docker Compose..."
+echo "Step 5: Installing Git..."
 
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-
-print_status "Docker Compose installed"
-
-# =============================================================================
-# 6. Install Git
-# =============================================================================
-echo ""
-echo "Step 6: Installing Git..."
-
-sudo dnf install -y git
+sudo apt install -y git
 
 print_status "Git installed"
 
 # =============================================================================
-# 7. Create backup directory and script
+# 6. Create backup directory and script
 # =============================================================================
 echo ""
-echo "Step 7: Setting up backup system..."
+echo "Step 6: Setting up backup system..."
 
-# Install cronie for crontab (not installed by default on Amazon Linux 2023)
-sudo dnf install -y cronie
-sudo systemctl enable crond
-sudo systemctl start crond
+# cron is usually pre-installed on Ubuntu, but ensure it's running
+sudo apt install -y cron
+sudo systemctl enable cron
+sudo systemctl start cron
 
 sudo mkdir -p /backups
-sudo chown ec2-user:ec2-user /backups
+sudo chown $CURRENT_USER:$CURRENT_USER /backups
 
 # Create backup script
-cat > /home/ec2-user/backup-postgres.sh << 'BACKUP_SCRIPT'
+cat > /home/$CURRENT_USER/backup-postgres.sh << 'BACKUP_SCRIPT'
 #!/bin/bash
 # PostgreSQL Backup Script
 
@@ -204,15 +196,15 @@ find ${BACKUP_DIR} -name "ebarmm_*.sql.gz" -mtime +7 -delete
 echo "Backup completed: ${FILENAME}"
 BACKUP_SCRIPT
 
-chmod +x /home/ec2-user/backup-postgres.sh
+chmod +x /home/$CURRENT_USER/backup-postgres.sh
 
 # Add to crontab (daily at 2 AM)
-(crontab -l 2>/dev/null; echo "0 2 * * * /home/ec2-user/backup-postgres.sh >> /var/log/backup.log 2>&1") | crontab -
+(crontab -l 2>/dev/null; echo "0 2 * * * /home/$CURRENT_USER/backup-postgres.sh >> /var/log/backup.log 2>&1") | crontab -
 
 print_status "Backup system configured"
 
 # =============================================================================
-# 8. Generate JWT Secret
+# 7. Generate JWT Secret
 # =============================================================================
 JWT_SECRET=$(openssl rand -hex 32)
 
@@ -234,14 +226,16 @@ echo "----------------------------------------"
 echo ""
 echo "Next steps:"
 echo "1. Log out and back in (for Docker group)"
-echo "2. Clone your repository"
+echo "2. Clone your repository (if not already done)"
 echo "3. Create .env.staging from .env.staging.example"
 echo "4. Run database init scripts:"
 echo "   sudo -u postgres psql ebarmm < database/01_create_tables.sql"
 echo "   sudo -u postgres psql ebarmm < database/02_create_triggers.sql"
 echo "   sudo -u postgres psql ebarmm < database/03_seed_data.sql"
+echo "   sudo -u postgres psql ebarmm < database/04_user_management.sql"
+echo "   sudo -u postgres psql ebarmm < database/05_demo_data.sql  # Optional"
 echo "5. Start services:"
 echo "   cd docker"
-echo "   docker-compose -f docker-compose.staging.yml --env-file .env.staging up -d"
+echo "   docker compose -f docker-compose.staging.yml --env-file .env.staging up -d"
 echo ""
 print_warning "IMPORTANT: Log out and back in for Docker permissions to take effect!"
