@@ -156,7 +156,16 @@ sudo systemctl start docker
 sudo systemctl enable docker
 sudo usermod -aG docker $CURRENT_USER
 
-print_status "Docker installed"
+# Ensure Docker waits for PostgreSQL on reboot
+sudo mkdir -p /etc/systemd/system/docker.service.d
+cat <<EOF | sudo tee /etc/systemd/system/docker.service.d/wait-for-postgres.conf
+[Unit]
+After=postgresql.service
+Requires=postgresql.service
+EOF
+sudo systemctl daemon-reload
+
+print_status "Docker installed (configured to start after PostgreSQL)"
 
 # =============================================================================
 # 5. Install Git (usually pre-installed on Ubuntu)
