@@ -11,6 +11,7 @@ import androidx.work.*
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import okhttp3.OkHttpClient
+import com.barmm.ebarmm.data.sync.worker.GpsTrackSyncWorker
 import com.barmm.ebarmm.data.sync.worker.MediaUploadWorker
 import com.barmm.ebarmm.data.sync.worker.ProgressSyncWorker
 import dagger.hilt.android.HiltAndroidApp
@@ -92,6 +93,19 @@ class EBarmmApplication : Application(), Configuration.Provider, ImageLoaderFact
             )
             .build()
 
+        // GPS track sync runs after media sync (tracks depend on video uploads)
+        val gpsTrackSyncRequest = PeriodicWorkRequestBuilder<GpsTrackSyncWorker>(
+            repeatInterval = 30,
+            repeatIntervalTimeUnit = TimeUnit.MINUTES
+        )
+            .setConstraints(constraints)
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                30,
+                TimeUnit.SECONDS
+            )
+            .build()
+
         WorkManager.getInstance(this).apply {
             enqueueUniquePeriodicWork(
                 ProgressSyncWorker.WORK_NAME,
@@ -103,6 +117,12 @@ class EBarmmApplication : Application(), Configuration.Provider, ImageLoaderFact
                 MediaUploadWorker.WORK_NAME,
                 ExistingPeriodicWorkPolicy.KEEP,
                 mediaSyncRequest
+            )
+
+            enqueueUniquePeriodicWork(
+                GpsTrackSyncWorker.WORK_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                gpsTrackSyncRequest
             )
         }
     }
@@ -141,9 +161,17 @@ class EBarmmApplication : Application(), Configuration.Provider, ImageLoaderFact
             .setConstraints(constraints)
             .build()
 
+        // GPS track sync should run after media upload
+        val gpsTrackSyncRequest = OneTimeWorkRequestBuilder<GpsTrackSyncWorker>()
+            .setConstraints(constraints)
+            .build()
+
         WorkManager.getInstance(this).apply {
             enqueue(progressSyncRequest)
-            enqueue(mediaSyncRequest)
+            // Chain media upload -> GPS track sync (tracks depend on video server IDs)
+            beginWith(mediaSyncRequest)
+                .then(gpsTrackSyncRequest)
+                .enqueue()
         }
     }
 }

@@ -2,6 +2,7 @@ package com.barmm.ebarmm.di
 
 import com.barmm.ebarmm.BuildConfig
 import com.barmm.ebarmm.data.remote.api.AuthApi
+import com.barmm.ebarmm.data.remote.api.GpsTrackApi
 import com.barmm.ebarmm.data.remote.api.MediaApi
 import com.barmm.ebarmm.data.remote.api.ProgressApi
 import com.barmm.ebarmm.data.remote.api.ProjectApi
@@ -83,5 +84,11 @@ object NetworkModule {
     @Singleton
     fun providePublicApi(retrofit: Retrofit): PublicApi {
         return retrofit.create(PublicApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGpsTrackApi(retrofit: Retrofit): GpsTrackApi {
+        return retrofit.create(GpsTrackApi::class.java)
     }
 }
