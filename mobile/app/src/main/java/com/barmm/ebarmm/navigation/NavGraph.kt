@@ -174,6 +174,9 @@ fun NavGraph(
                     },
                     onReportProgress = { id ->
                         navController.navigate(Screen.ProgressReport.createRoute(id))
+                    },
+                    onAddPhoto = { id ->
+                        navController.navigate(Screen.CameraCapture.createRoute(id, null))
                     }
                 )
             }

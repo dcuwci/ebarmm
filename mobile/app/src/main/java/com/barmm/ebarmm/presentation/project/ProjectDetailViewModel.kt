@@ -145,6 +145,13 @@ class ProjectDetailViewModel @Inject constructor(
         )
     }
 
+    fun refreshPhotos(projectId: String) {
+        viewModelScope.launch {
+            val photos = loadProjectPhotos(projectId)
+            _uiState.update { it.copy(photos = photos, photoCount = photos.size) }
+        }
+    }
+
     private suspend fun loadProjectPhotos(projectId: String): List<ProjectPhoto> {
         val photos = mutableListOf<ProjectPhoto>()
         val existingIds = mutableSetOf<String>()
