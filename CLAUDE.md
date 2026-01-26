@@ -2,8 +2,33 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-<!-- Last reviewed: 2026-01-25 -->
-<!-- Last updated: 2026-01-25 -->
+<!-- Last reviewed: 2026-01-26 -->
+<!-- Last updated: 2026-01-26 -->
+
+## Important Reminders (Read First!)
+
+### Staging Environment
+- **PostgreSQL runs NATIVELY on EC2**, not in Docker. Only backend, frontend, and Redis run in Docker.
+- **Use `docker compose` (V2)** not `docker-compose` (V1) on staging
+- **Always include `--env-file .env.staging`** with docker compose commands, or variables won't load
+- Correct command: `docker compose -f docker-compose.staging.yml --env-file .env.staging up -d`
+- To check PostgreSQL: `sudo systemctl status postgresql` and `sudo -u postgres psql ebarmm`
+- To check Docker→PostgreSQL connectivity: `sudo cat /etc/postgresql/15/main/pg_hba.conf | grep 172.17`
+
+### Deploying Changes to Staging
+```bash
+# On EC2:
+cd ~/ebarmm && git pull
+cd docker
+docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build frontend  # Frontend only
+docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build backend   # Backend only
+docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build           # Both
+```
+
+### Security
+- Never commit real secrets - only dev defaults (admin123, DevPassword123, minioadmin) are OK
+- Real staging credentials go in `.env.staging` on EC2 only (gitignored)
+- AWS region for staging is `ap-northeast-1`
 
 ## Quick Commands
 
