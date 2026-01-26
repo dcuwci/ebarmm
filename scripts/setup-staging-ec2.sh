@@ -156,16 +156,29 @@ sudo systemctl start docker
 sudo systemctl enable docker
 sudo usermod -aG docker $CURRENT_USER
 
-# Ensure Docker waits for PostgreSQL on reboot
-sudo mkdir -p /etc/systemd/system/docker.service.d
-cat <<EOF | sudo tee /etc/systemd/system/docker.service.d/wait-for-postgres.conf
+# Create service to restart PostgreSQL after Docker (so it binds to docker0 interface)
+# The docker0 interface (172.17.0.1) doesn't exist until Docker starts,
+# so PostgreSQL needs to restart after Docker to bind to it.
+cat <<EOF | sudo tee /etc/systemd/system/postgresql-docker-fix.service
 [Unit]
-After=postgresql.service
-Requires=postgresql.service
-EOF
-sudo systemctl daemon-reload
+Description=Restart PostgreSQL after Docker network is ready
+After=docker.service
+Requires=docker.service
 
-print_status "Docker installed (configured to start after PostgreSQL)"
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 5
+ExecStart=/bin/systemctl restart postgresql
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable postgresql-docker-fix.service
+
+print_status "Docker installed (PostgreSQL will restart after Docker on reboot)"
 
 # =============================================================================
 # 5. Install Git (usually pre-installed on Ubuntu)
