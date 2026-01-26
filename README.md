@@ -16,13 +16,21 @@ This repository contains the complete system architecture and design specificati
 
 | Document | Description | Key Topics |
 |----------|-------------|------------|
-| **[ARCHITECTURE.md](ARCHITECTURE.md)** | System architecture overview | Three-tier API-first design, data flows, technology stack justification, scalability, disaster recovery |
-| **[DATABASE_MAPPING.md](DATABASE_MAPPING.md)** | Legacy to target schema mapping | Table-by-table migration, field transformations, UUID migration, hash chain reconstruction |
-| **[API_DESIGN.md](API_DESIGN.md)** | FastAPI endpoint specifications | Authentication, RBAC, CRUD operations, append-only progress, public API, error handling |
-| **[FRONTEND_DESIGN.md](FRONTEND_DESIGN.md)** | React application architecture | Component hierarchy, routing, GIS editor, progress timeline, role-based UI |
-| **[MOBILE_STRATEGY.md](MOBILE_STRATEGY.md)** | Android offline-first app | SQLite schema, sync workers, GPS integration, camera capture, conflict resolution |
-| **[SECURITY.md](SECURITY.md)** | Security & integrity controls | JWT authentication, RBAC, hash chaining, tamper-proof logging, encryption, audit trails |
-| **[MIGRATION.md](MIGRATION.md)** | Migration execution plan | Pre-migration backup, infrastructure setup, migration scripts, validation, cutover |
+| **[ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md)** | System architecture overview | Three-tier API-first design, data flows, technology stack justification, scalability, disaster recovery |
+| **[DATABASE_MAPPING.md](docs/architecture/DATABASE_MAPPING.md)** | Legacy to target schema mapping | Table-by-table migration, field transformations, UUID migration, hash chain reconstruction |
+| **[API_DESIGN.md](docs/architecture/API_DESIGN.md)** | FastAPI endpoint specifications | Authentication, RBAC, CRUD operations, append-only progress, public API, error handling |
+| **[FRONTEND_DESIGN.md](docs/architecture/FRONTEND_DESIGN.md)** | React application architecture | Component hierarchy, routing, GIS editor, progress timeline, role-based UI |
+| **[MOBILE_STRATEGY.md](docs/mobile/MOBILE_STRATEGY.md)** | Android offline-first app | SQLite schema, sync workers, GPS integration, camera capture, conflict resolution |
+| **[SECURITY.md](docs/architecture/SECURITY.md)** | Security & integrity controls | JWT authentication, RBAC, hash chaining, tamper-proof logging, encryption, audit trails |
+| **[MIGRATION.md](docs/guides/MIGRATION.md)** | Migration execution plan | Pre-migration backup, infrastructure setup, migration scripts, validation, cutover |
+
+### Setup Guides
+
+| Document | Description |
+|----------|-------------|
+| **[QUICKSTART.md](docs/guides/QUICKSTART.md)** | Local development quick start |
+| **[STAGING.md](docs/guides/STAGING.md)** | AWS EC2 staging deployment |
+| **[mobile/README.md](mobile/README.md)** | Android app setup and build |
 
 ---
 
@@ -310,7 +318,7 @@ Any modification breaks the chain → tampering detected
 - [x] Set up FastAPI project structure
 - [x] Implement authentication & RBAC
 - [x] Create SQLAlchemy models
-- [x] Build API endpoints (refer to [API_DESIGN.md](API_DESIGN.md))
+- [x] Build API endpoints (refer to [API_DESIGN.md](docs/architecture/API_DESIGN.md))
 - [x] Implement User Management API
 - [x] Implement Groups & Access Rights API
 - [x] Implement MFA (Multi-Factor Authentication)
@@ -347,7 +355,7 @@ Any modification breaks the chain → tampering detected
 - [ ] Release beta to Play Store
 
 ### 4. Database Migration
-- [ ] Run migration scripts (refer to [MIGRATION.md](MIGRATION.md))
+- [ ] Run migration scripts (refer to [MIGRATION.md](docs/guides/MIGRATION.md))
 - [ ] Validate data integrity
 - [ ] Verify hash chains
 - [ ] Test performance
@@ -355,7 +363,7 @@ Any modification breaks the chain → tampering detected
 ### 5. Security Audit
 - [ ] Penetration testing
 - [ ] Code review (security focus)
-- [ ] Compliance check (refer to [SECURITY.md](SECURITY.md))
+- [ ] Compliance check (refer to [SECURITY.md](docs/architecture/SECURITY.md))
 - [ ] Fix vulnerabilities
 
 ### 6. User Training
@@ -365,7 +373,7 @@ Any modification breaks the chain → tampering detected
 - [ ] Documentation (user manuals)
 
 ### 7. Go-Live
-- [ ] Final cutover (refer to [MIGRATION.md](MIGRATION.md))
+- [ ] Final cutover (refer to [MIGRATION.md](docs/guides/MIGRATION.md))
 - [ ] Monitor for 48 hours
 - [ ] User support (hotline)
 - [ ] Post-launch review

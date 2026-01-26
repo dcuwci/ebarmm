@@ -283,15 +283,14 @@ mobile/app/src/main/java/com/barmm/ebarmm/
 
 ## Related Documentation
 
-| File | Description |
-|------|-------------|
-| `README.md` | Project overview and setup |
-| `QUICKSTART.md` | Quick start guide |
-| `ARCHITECTURE.md` | System architecture details |
-| `API_DESIGN.md` | API endpoint specifications |
-| `FRONTEND_DESIGN.md` | Frontend design patterns |
-| `MOBILE_STRATEGY.md` | Mobile app strategy |
-| `DATABASE_MAPPING.md` | Database schema reference |
-| `SECURITY.md` | Security implementation details |
-| `MIGRATION.md` | Database migration instructions |
-| `STAGING.md` | AWS staging environment setup guide |
+All documentation is organized under `docs/`:
+
+| Folder | Contents |
+|--------|----------|
+| `docs/architecture/` | ARCHITECTURE.md, API_DESIGN.md, DATABASE_MAPPING.md, FRONTEND_DESIGN.md, SECURITY.md |
+| `docs/guides/` | QUICKSTART.md, STAGING.md, MIGRATION.md |
+| `docs/mobile/` | MOBILE_STRATEGY.md |
+| `docs/reports/` | PROGRESS_REPORT.md, E-BARMM-Inception-Report.md |
+| `docs/archive/` | Historical docs (OG_PROMPT.md, SYSTEM_REFERENCE.md, IMPLEMENTATION_SUMMARY.md) |
+| `mobile/README.md` | Android app setup and build instructions |
+| `docker/README.md` | Docker deployment instructions |
