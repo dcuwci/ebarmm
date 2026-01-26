@@ -389,6 +389,9 @@ private fun OsmMapView(
 ) {
     val context = LocalContext.current
     var hasInitialZoom by remember { mutableStateOf(false) }
+    // Track previous state to avoid unnecessary overlay rebuilds
+    var lastGeometriesSize by remember { mutableStateOf(0) }
+    var lastPhotoMarkersSize by remember { mutableStateOf(0) }
 
     val mapView = remember {
         MapView(context).apply {
@@ -404,7 +407,15 @@ private fun OsmMapView(
         factory = { mapView },
         modifier = Modifier.fillMaxSize(),
         update = { map ->
-            map.overlays.clear()
+            // Only rebuild overlays if data actually changed
+            val geometriesChanged = geometries.size != lastGeometriesSize
+            val photoMarkersChanged = photoMarkers.size != lastPhotoMarkersSize
+
+            if (geometriesChanged || photoMarkersChanged || !hasInitialZoom) {
+                lastGeometriesSize = geometries.size
+                lastPhotoMarkersSize = photoMarkers.size
+
+                map.overlays.clear()
 
             geometries.forEach { geometry ->
                 val color = getStatusColor(geometry.status)
@@ -547,32 +558,35 @@ private fun OsmMapView(
                 map.overlays.add(photoMarker)
             }
 
-            // Zoom to fit all geometries on initial load
-            if (!hasInitialZoom && geometries.isNotEmpty()) {
-                val allPoints = mutableListOf<GeoPoint>()
+                // Zoom to fit all geometries on initial load
+                if (!hasInitialZoom && geometries.isNotEmpty()) {
+                    val allPoints = mutableListOf<GeoPoint>()
 
-                geometries.forEach { geometry ->
-                    when (geometry) {
-                        is ProjectGeometry.Point -> allPoints.add(geometry.location)
-                        is ProjectGeometry.Line -> allPoints.addAll(geometry.points)
-                        is ProjectGeometry.MultiLine -> geometry.segments.forEach { allPoints.addAll(it) }
-                        is ProjectGeometry.Polygon -> allPoints.addAll(geometry.points)
+                    geometries.forEach { geometry ->
+                        when (geometry) {
+                            is ProjectGeometry.Point -> allPoints.add(geometry.location)
+                            is ProjectGeometry.Line -> allPoints.addAll(geometry.points)
+                            is ProjectGeometry.MultiLine -> geometry.segments.forEach { allPoints.addAll(it) }
+                            is ProjectGeometry.Polygon -> allPoints.addAll(geometry.points)
+                        }
+                    }
+
+                    if (allPoints.isNotEmpty()) {
+                        val boundingBox = org.osmdroid.util.BoundingBox.fromGeoPoints(allPoints)
+                        // Use built-in padding (50 pixels on each side)
+                        map.zoomToBoundingBox(boundingBox, false, 50)
+                        // Ensure minimum zoom level of 6 to prevent world map duplication
+                        if (map.zoomLevelDouble < 6.0) {
+                            map.controller.setZoom(6.0)
+                        }
+                        hasInitialZoom = true
                     }
                 }
 
-                if (allPoints.isNotEmpty()) {
-                    val boundingBox = org.osmdroid.util.BoundingBox.fromGeoPoints(allPoints)
-                    // Use built-in padding (50 pixels on each side)
-                    map.zoomToBoundingBox(boundingBox, false, 50)
-                    // Ensure minimum zoom level of 6 to prevent world map duplication
-                    if (map.zoomLevelDouble < 6.0) {
-                        map.controller.setZoom(6.0)
-                    }
-                    hasInitialZoom = true
-                }
-            }
+                map.invalidate()
+            } // end if (geometriesChanged || photoMarkersChanged)
 
-            // Zoom to selected project if any
+            // Zoom to selected project if any (outside overlay rebuild block)
             selectedProject?.let { project ->
                 geometries.find { it.projectId == project.projectId }?.let { geometry ->
                     val targetPoint = when (geometry) {
@@ -584,11 +598,10 @@ private fun OsmMapView(
                     targetPoint?.let {
                         map.controller.animateTo(it)
                         map.controller.setZoom(14.0)
+                        map.invalidate()
                     }
                 }
             }
-
-            map.invalidate()
         }
     )
 

@@ -10,9 +10,12 @@ import com.barmm.ebarmm.data.local.database.entity.GpsTrackEntity
 import com.barmm.ebarmm.data.local.database.entity.ProgressEntity
 import com.barmm.ebarmm.data.local.database.entity.ProjectEntity
 import com.barmm.ebarmm.data.local.database.entity.SyncStatus
+import com.barmm.ebarmm.data.remote.api.GpsTrackApi
 import com.barmm.ebarmm.data.remote.api.MediaApi
 import com.barmm.ebarmm.data.remote.api.ProjectApi
+import com.barmm.ebarmm.data.remote.dto.GpsTrackResponse
 import com.barmm.ebarmm.data.remote.dto.ProjectResponse
+import com.google.gson.Gson
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -61,7 +64,9 @@ class ProjectDetailViewModel @Inject constructor(
     private val mediaDao: MediaDao,
     private val gpsTrackDao: GpsTrackDao,
     private val mediaApi: MediaApi,
-    private val projectApi: ProjectApi
+    private val projectApi: ProjectApi,
+    private val gpsTrackApi: GpsTrackApi,
+    private val gson: Gson
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProjectDetailUiState())
@@ -179,20 +184,94 @@ class ProjectDetailViewModel @Inject constructor(
     }
 
     private suspend fun loadGpsTracks(projectId: String): List<GpsTrackInfo> {
-        return try {
-            gpsTrackDao.getTracksByProjectOnce(projectId).map { track ->
-                GpsTrackInfo(
-                    trackId = track.trackId,
-                    trackName = track.trackName,
-                    waypointCount = track.waypointCount,
-                    totalDistanceMeters = track.totalDistanceMeters,
-                    startTime = track.startTime,
-                    endTime = track.endTime,
-                    isLocal = track.serverId == null
-                )
+        val tracks = mutableListOf<GpsTrackInfo>()
+        val existingServerIds = mutableSetOf<String>()
+
+        // Fetch from backend first
+        try {
+            val response = gpsTrackApi.getProjectGpsTracks(projectId)
+            if (response.isSuccessful && response.body() != null) {
+                response.body()!!.forEach { serverTrack ->
+                    // Cache to local database for offline access
+                    cacheGpsTrackFromServer(serverTrack)
+                    existingServerIds.add(serverTrack.trackId)
+
+                    tracks.add(
+                        GpsTrackInfo(
+                            trackId = serverTrack.trackId,
+                            trackName = serverTrack.trackName,
+                            waypointCount = serverTrack.waypointCount,
+                            totalDistanceMeters = serverTrack.totalDistanceMeters,
+                            startTime = parseIsoDate(serverTrack.startTime),
+                            endTime = serverTrack.endTime?.let { parseIsoDate(it) },
+                            isLocal = false
+                        )
+                    )
+                }
             }
         } catch (e: Exception) {
-            emptyList()
+            // Backend fetch failed, continue with local tracks
+        }
+
+        // Add local tracks not yet synced (no serverId or serverId not in existing list)
+        try {
+            gpsTrackDao.getTracksByProjectOnce(projectId).forEach { track ->
+                if (track.serverId == null || track.serverId !in existingServerIds) {
+                    tracks.add(
+                        GpsTrackInfo(
+                            trackId = track.trackId,
+                            trackName = track.trackName,
+                            waypointCount = track.waypointCount,
+                            totalDistanceMeters = track.totalDistanceMeters,
+                            startTime = track.startTime,
+                            endTime = track.endTime,
+                            isLocal = track.serverId == null
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            // Local fetch failed, continue with what we have
+        }
+
+        return tracks.sortedByDescending { it.startTime }
+    }
+
+    private suspend fun cacheGpsTrackFromServer(serverTrack: GpsTrackResponse) {
+        try {
+            // Check if we already have this track locally (by serverId)
+            val existingTrack = gpsTrackDao.getTracksByProjectOnce(serverTrack.projectId)
+                .find { it.serverId == serverTrack.trackId }
+
+            if (existingTrack == null) {
+                // Create new local entity from server data
+                val waypointsJson = gson.toJson(serverTrack.waypoints)
+                val entity = GpsTrackEntity(
+                    trackId = java.util.UUID.randomUUID().toString(),
+                    projectId = serverTrack.projectId,
+                    mediaLocalId = "", // Server tracks don't have local media
+                    trackName = serverTrack.trackName,
+                    waypointsJson = waypointsJson,
+                    waypointCount = serverTrack.waypointCount,
+                    totalDistanceMeters = serverTrack.totalDistanceMeters,
+                    startTime = parseIsoDate(serverTrack.startTime),
+                    endTime = serverTrack.endTime?.let { parseIsoDate(it) },
+                    syncStatus = SyncStatus.SYNCED,
+                    serverId = serverTrack.trackId,
+                    syncedAt = System.currentTimeMillis()
+                )
+                gpsTrackDao.upsertTrack(entity)
+            }
+        } catch (e: Exception) {
+            // Caching failed, not critical
+        }
+    }
+
+    private fun parseIsoDate(isoDate: String): Long {
+        return try {
+            Instant.parse(isoDate).toEpochMilli()
+        } catch (e: Exception) {
+            System.currentTimeMillis()
         }
     }
 
