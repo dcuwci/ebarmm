@@ -18,6 +18,12 @@ class AuthInterceptor @Inject constructor(
             return chain.proceed(original)
         }
 
+        // Skip auth for S3 presigned URLs (they have signature in URL)
+        val host = original.url.host
+        if (host.contains("s3.") || host.contains("amazonaws.com") || host.contains("minio")) {
+            return chain.proceed(original)
+        }
+
         val token = runBlocking { tokenManager.getAccessToken() }
 
         val request = if (token != null) {
