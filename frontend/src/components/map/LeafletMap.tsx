@@ -10,7 +10,8 @@ import { MapContainer, TileLayer, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, Cat } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../../theme/ThemeContext';
 import { parseWKTGeometry, calculateBounds, getStatusColor } from '../../utils/geometry';
 
@@ -260,6 +261,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   autoFitBounds = true,
 }) => {
   const { mode, toggleTheme } = useTheme();
+  const navigate = useNavigate();
   const tileLayer = mode === 'dark' ? TILE_LAYERS.dark : TILE_LAYERS.light;
 
   return (
@@ -307,6 +309,30 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
           {mode === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
         </IconButton>
       )}
+
+      {/* Secret Cat Easter Egg */}
+      <IconButton
+        onClick={() => navigate('/secret-cat')}
+        sx={{
+          position: 'absolute',
+          bottom: 10,
+          left: 10,
+          zIndex: 1000,
+          bgcolor: 'background.paper',
+          boxShadow: 1,
+          opacity: 0.4,
+          width: 28,
+          height: 28,
+          '&:hover': {
+            bgcolor: 'background.paper',
+            opacity: 0.8,
+          },
+          transition: 'opacity 0.3s ease',
+        }}
+        title="Meow?"
+      >
+        <Cat size={14} />
+      </IconButton>
     </Box>
   );
 };

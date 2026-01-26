@@ -11,6 +11,7 @@ import PublicDashboard from './routes/public/PublicDashboard'
 import PublicProjects from './routes/public/PublicProjects'
 import PublicMap from './routes/public/PublicMap'
 import ProjectDetails from './routes/public/ProjectDetails'
+import SecretCat from './routes/public/SecretCat'
 
 // Auth routes
 import Login from './routes/auth/Login'
@@ -48,6 +49,9 @@ function App() {
           <Route path="/portal/projects/:projectId" element={<ProjectDetails />} />
           <Route path="/map" element={<PublicMap />} />
         </Route>
+
+        {/* Secret Easter egg */}
+        <Route path="/secret-cat" element={<SecretCat />} />
 
         {/* Auth routes */}
         <Route path="/login" element={<Login />} />
