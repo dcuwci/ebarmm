@@ -659,8 +659,12 @@ private fun PhotoPreviewCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    // Use thumbnail endpoint for preview (smaller, cached, faster)
-    val thumbnailUrl = "${BuildConfig.API_BASE_URL}/api/v1/media/${photo.mediaId}/thumbnail?size=400"
+    // Use local file path for unsynced photos, otherwise use thumbnail API
+    val thumbnailUrl = if (photo.filePath != null) {
+        "file://${photo.filePath}"
+    } else {
+        "${BuildConfig.API_BASE_URL}/api/v1/media/${photo.mediaId}/thumbnail?size=400"
+    }
 
     Card(
         modifier = modifier

@@ -203,26 +203,28 @@ class ProjectDetailViewModel @Inject constructor(
         try {
             val response = mediaApi.getProjectMedia(projectId, limit = 50)
             if (response.isSuccessful && response.body() != null) {
-                response.body()!!.forEach { media ->
-                    // Use thumbnail endpoint for previews (smaller, cached)
-                    // Use file endpoint for full-size images
-                    val baseUrl = com.barmm.ebarmm.BuildConfig.API_BASE_URL
-                    val thumbnailUrl = "$baseUrl/api/v1/media/${media.id}/thumbnail?size=300"
-                    val fullImageUrl = "$baseUrl/api/v1/media/${media.id}/file"
-                    photos.add(
-                        ProjectPhoto(
-                            mediaId = media.id,
-                            fileName = media.fileName,
-                            thumbnailUrl = thumbnailUrl,
-                            fullImageUrl = fullImageUrl,
-                            filePath = null,
-                            latitude = media.latitude,
-                            longitude = media.longitude,
-                            isLocal = false
+                response.body()!!
+                    .filter { it.mediaType == "photo" } // Only photos, not videos
+                    .forEach { media ->
+                        // Use thumbnail endpoint for previews (smaller, cached)
+                        // Use file endpoint for full-size images
+                        val baseUrl = com.barmm.ebarmm.BuildConfig.API_BASE_URL
+                        val thumbnailUrl = "$baseUrl/api/v1/media/${media.id}/thumbnail?size=300"
+                        val fullImageUrl = "$baseUrl/api/v1/media/${media.id}/file"
+                        photos.add(
+                            ProjectPhoto(
+                                mediaId = media.id,
+                                fileName = media.fileName,
+                                thumbnailUrl = thumbnailUrl,
+                                fullImageUrl = fullImageUrl,
+                                filePath = null,
+                                latitude = media.latitude,
+                                longitude = media.longitude,
+                                isLocal = false
+                            )
                         )
-                    )
-                    existingIds.add(media.id)
-                }
+                        existingIds.add(media.id)
+                    }
             }
         } catch (e: Exception) {
             // Backend fetch failed, continue with local photos
@@ -231,23 +233,25 @@ class ProjectDetailViewModel @Inject constructor(
         // Add local photos not yet synced (skip those with serverId - they're already in the list from backend)
         try {
             val localPhotos = mediaDao.getMediaByProject(projectId).first()
-            localPhotos.forEach { media ->
-                // Only add if NOT synced (no serverId) and not already in list
-                if (media.serverId == null && media.localId !in existingIds) {
-                    photos.add(
-                        ProjectPhoto(
-                            mediaId = media.localId,
-                            fileName = media.fileName,
-                            thumbnailUrl = null,
-                            fullImageUrl = null,
-                            filePath = media.filePath,
-                            latitude = media.latitude,
-                            longitude = media.longitude,
-                            isLocal = true
+            localPhotos
+                .filter { it.isPhoto() } // Only photos, not videos
+                .forEach { media ->
+                    // Only add if NOT synced (no serverId) and not already in list
+                    if (media.serverId == null && media.localId !in existingIds) {
+                        photos.add(
+                            ProjectPhoto(
+                                mediaId = media.localId,
+                                fileName = media.fileName,
+                                thumbnailUrl = null,
+                                fullImageUrl = null,
+                                filePath = media.filePath,
+                                latitude = media.latitude,
+                                longitude = media.longitude,
+                                isLocal = true
+                            )
                         )
-                    )
+                    }
                 }
-            }
         } catch (e: Exception) {
             // Local fetch failed, continue with what we have
         }

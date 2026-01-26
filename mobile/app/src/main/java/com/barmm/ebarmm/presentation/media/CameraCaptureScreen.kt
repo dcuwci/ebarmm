@@ -11,6 +11,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material.icons.filled.LocationOn
@@ -47,12 +48,23 @@ fun CameraCaptureScreen(
     val location by viewModel.currentLocation.collectAsState()
 
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
+    val locationPermission = rememberPermissionState(Manifest.permission.ACCESS_FINE_LOCATION)
 
+    // Request both permissions
     LaunchedEffect(Unit) {
         if (!cameraPermission.status.isGranted) {
             cameraPermission.launchPermissionRequest()
         }
-        viewModel.startLocationUpdates()
+        if (!locationPermission.status.isGranted) {
+            locationPermission.launchPermissionRequest()
+        }
+    }
+
+    // Start location updates only after permission is granted
+    LaunchedEffect(locationPermission.status.isGranted) {
+        if (locationPermission.status.isGranted) {
+            viewModel.startLocationUpdates()
+        }
     }
 
     DisposableEffect(Unit) {
@@ -61,12 +73,30 @@ fun CameraCaptureScreen(
         }
     }
 
+    // Check camera permission
     if (!cameraPermission.status.isGranted) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             Text("Camera permission is required")
+        }
+        return
+    }
+
+    // Check location permission
+    if (!locationPermission.status.isGranted) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Location permission is required for geotagged photos")
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = { locationPermission.launchPermissionRequest() }) {
+                    Text("Grant Location Permission")
+                }
+            }
         }
         return
     }
@@ -110,17 +140,20 @@ fun CameraCaptureScreen(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             // Top bar - location status
-            if (location != null) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                    )
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = if (location != null)
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                    else
+                        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.9f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    if (location != null) {
                         Icon(
                             imageVector = Icons.Default.LocationOn,
                             contentDescription = null,
@@ -131,17 +164,45 @@ fun CameraCaptureScreen(
                             text = "GPS: ${location!!.accuracy.toInt()}m accuracy",
                             style = MaterialTheme.typography.bodySmall
                         )
+                    } else {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Text(
+                            text = "Waiting for GPS...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
                     }
                 }
             }
 
             // Bottom bar - capture button
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // GPS required message when disabled
+                if (location == null) {
+                    Text(
+                        text = "GPS required to capture photo",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White,
+                        modifier = Modifier
+                            .background(
+                                color = Color.Black.copy(alpha = 0.6f),
+                                shape = MaterialTheme.shapes.small
+                            )
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 FloatingActionButton(
                     onClick = {
+                        if (location == null) return@FloatingActionButton // Safety check
+
                         val photoFile = createPhotoFile(context)
                         val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
 
@@ -164,13 +225,22 @@ fun CameraCaptureScreen(
                             }
                         )
                     },
-                    modifier = Modifier.size(72.dp),
-                    containerColor = MaterialTheme.colorScheme.primary
+                    modifier = Modifier
+                        .size(72.dp)
+                        .then(if (location == null) Modifier.alpha(0.5f) else Modifier),
+                    containerColor = if (location != null)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Icon(
                         imageVector = Icons.Default.Camera,
                         contentDescription = "Capture",
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(32.dp),
+                        tint = if (location != null)
+                            MaterialTheme.colorScheme.onPrimary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

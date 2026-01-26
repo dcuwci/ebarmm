@@ -198,17 +198,24 @@ class MapViewModel @Inject constructor(
                     val projectMedia = mediaDao.getMediaByProject(project.projectId).first()
                     projectMedia
                         .filter { it.latitude != null && it.longitude != null }
-                        .filter { it.localId !in existingIds } // Avoid duplicates
+                        .filter { it.isPhoto() } // Only photos, not videos (videos don't have thumbnails)
+                        .filter { media ->
+                            // Avoid duplicates: skip if server ID already in existingIds
+                            val serverId = media.serverId
+                            serverId == null || serverId !in existingIds
+                        }
                         .forEach { media ->
+                            // Use serverId if available (synced), otherwise localId
+                            val effectiveId = media.serverId ?: media.localId
                             photoMarkers.add(
                                 PhotoMarker(
-                                    mediaId = media.localId,
+                                    mediaId = effectiveId,
                                     projectId = media.projectId,
                                     projectTitle = project.name,
                                     latitude = media.latitude!!,
                                     longitude = media.longitude!!,
                                     fileName = media.fileName,
-                                    filePath = media.filePath
+                                    filePath = if (media.serverId == null) media.filePath else null // Only set for unsynced
                                 )
                             )
                             localCount++
