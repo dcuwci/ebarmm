@@ -40,7 +40,8 @@ fun ProjectDetailScreen(
     viewModel: ProjectDetailViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
     onReportProgress: (String) -> Unit,
-    onAddPhoto: (String) -> Unit
+    onAddPhoto: (String) -> Unit,
+    onRouteShoot: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -49,11 +50,12 @@ fun ProjectDetailScreen(
         viewModel.loadProject(projectId)
     }
 
-    // Refresh photos when returning from camera screen
+    // Refresh photos and GPS tracks when returning from camera/routeshoot screen
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.refreshPhotos(projectId)
+                viewModel.refreshGpsTracks(projectId)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -383,6 +385,75 @@ fun ProjectDetailScreen(
                         }
                     }
 
+                    // GPS Tracks section - always show
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 16.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Route,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "GPS Tracks",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${uiState.gpsTracks.size} tracks",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    FilledTonalIconButton(
+                                        onClick = { onRouteShoot(projectId) }
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Videocam,
+                                            contentDescription = "Record Route"
+                                        )
+                                    }
+                                }
+                            }
+
+                            if (uiState.gpsTracks.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                uiState.gpsTracks.forEach { track ->
+                                    GpsTrackItem(track = track)
+                                    if (track != uiState.gpsTracks.last()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "No GPS tracks yet. Tap the camera icon to record a route.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(80.dp))
                 }
             }
@@ -576,4 +647,80 @@ private fun PhotoPlaceholder() {
         modifier = Modifier.size(32.dp),
         tint = MaterialTheme.colorScheme.onSurfaceVariant
     )
+}
+
+@Composable
+private fun GpsTrackItem(track: GpsTrackInfo) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = MaterialTheme.shapes.small,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = track.trackName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    if (track.isLocal) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.9f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "Local",
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiary
+                            )
+                        }
+                    }
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "${track.waypointCount} points",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    track.totalDistanceMeters?.let { distance ->
+                        Text(
+                            text = formatDistance(distance),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Text(
+                    text = formatDate(track.startTime),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                Icons.Default.Route,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+private fun formatDistance(meters: Double): String {
+    return if (meters >= 1000) {
+        String.format("%.2f km", meters / 1000)
+    } else {
+        String.format("%.0f m", meters)
+    }
 }

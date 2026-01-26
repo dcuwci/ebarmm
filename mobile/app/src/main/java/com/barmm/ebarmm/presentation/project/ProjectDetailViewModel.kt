@@ -2,9 +2,11 @@ package com.barmm.ebarmm.presentation.project
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.barmm.ebarmm.data.local.database.dao.GpsTrackDao
 import com.barmm.ebarmm.data.local.database.dao.MediaDao
 import com.barmm.ebarmm.data.local.database.dao.ProgressDao
 import com.barmm.ebarmm.data.local.database.dao.ProjectDao
+import com.barmm.ebarmm.data.local.database.entity.GpsTrackEntity
 import com.barmm.ebarmm.data.local.database.entity.ProgressEntity
 import com.barmm.ebarmm.data.local.database.entity.ProjectEntity
 import com.barmm.ebarmm.data.remote.api.MediaApi
@@ -31,13 +33,24 @@ data class ProjectPhoto(
     val isLocal: Boolean
 )
 
+data class GpsTrackInfo(
+    val trackId: String,
+    val trackName: String,
+    val waypointCount: Int,
+    val totalDistanceMeters: Double?,
+    val startTime: Long,
+    val endTime: Long?,
+    val isLocal: Boolean
+)
+
 data class ProjectDetailUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
     val project: ProjectEntity? = null,
     val recentProgress: List<ProgressEntity> = emptyList(),
     val photoCount: Int = 0,
-    val photos: List<ProjectPhoto> = emptyList()
+    val photos: List<ProjectPhoto> = emptyList(),
+    val gpsTracks: List<GpsTrackInfo> = emptyList()
 )
 
 @HiltViewModel
@@ -45,6 +58,7 @@ class ProjectDetailViewModel @Inject constructor(
     private val projectDao: ProjectDao,
     private val progressDao: ProgressDao,
     private val mediaDao: MediaDao,
+    private val gpsTrackDao: GpsTrackDao,
     private val mediaApi: MediaApi,
     private val projectApi: ProjectApi
 ) : ViewModel() {
@@ -73,13 +87,17 @@ class ProjectDetailViewModel @Inject constructor(
                     // Load photos from both backend and local
                     val photos = loadProjectPhotos(projectId)
 
+                    // Load GPS tracks
+                    val gpsTracks = loadGpsTracks(projectId)
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             project = project,
                             recentProgress = recentProgress,
                             photoCount = photos.size,
-                            photos = photos
+                            photos = photos,
+                            gpsTracks = gpsTracks
                         )
                     }
                 } else {
@@ -149,6 +167,31 @@ class ProjectDetailViewModel @Inject constructor(
         viewModelScope.launch {
             val photos = loadProjectPhotos(projectId)
             _uiState.update { it.copy(photos = photos, photoCount = photos.size) }
+        }
+    }
+
+    fun refreshGpsTracks(projectId: String) {
+        viewModelScope.launch {
+            val gpsTracks = loadGpsTracks(projectId)
+            _uiState.update { it.copy(gpsTracks = gpsTracks) }
+        }
+    }
+
+    private suspend fun loadGpsTracks(projectId: String): List<GpsTrackInfo> {
+        return try {
+            gpsTrackDao.getTracksByProjectOnce(projectId).map { track ->
+                GpsTrackInfo(
+                    trackId = track.trackId,
+                    trackName = track.trackName,
+                    waypointCount = track.waypointCount,
+                    totalDistanceMeters = track.totalDistanceMeters,
+                    startTime = track.startTime,
+                    endTime = track.endTime,
+                    isLocal = track.serverId == null
+                )
+            }
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 
