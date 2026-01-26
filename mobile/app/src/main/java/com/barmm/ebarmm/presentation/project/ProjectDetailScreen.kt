@@ -54,6 +54,9 @@ fun ProjectDetailScreen(
     var showSyncDebugDialog by remember { mutableStateOf(false) }
     var syncDebugInfo by remember { mutableStateOf("Loading...") }
 
+    // Photo viewer state
+    var selectedPhoto by remember { mutableStateOf<ProjectPhoto?>(null) }
+
     LaunchedEffect(projectId) {
         viewModel.loadProject(projectId)
     }
@@ -91,6 +94,14 @@ fun ProjectDetailScreen(
                     Text("Close")
                 }
             }
+        )
+    }
+
+    // Photo viewer dialog
+    selectedPhoto?.let { photo ->
+        PhotoViewerDialog(
+            photo = photo,
+            onDismiss = { selectedPhoto = null }
         )
     }
 
@@ -403,7 +414,10 @@ fun ProjectDetailScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     items(uiState.photos) { photo ->
-                                        PhotoThumbnail(photo = photo)
+                                        PhotoThumbnail(
+                                            photo = photo,
+                                            onClick = { selectedPhoto = photo }
+                                        )
                                     }
                                 }
                             } else {
@@ -575,14 +589,18 @@ private fun formatDate(millis: Long): String {
 }
 
 @Composable
-private fun PhotoThumbnail(photo: ProjectPhoto) {
+private fun PhotoThumbnail(
+    photo: ProjectPhoto,
+    onClick: () -> Unit
+) {
     val context = LocalContext.current
 
     Box(
         modifier = Modifier
             .size(100.dp)
             .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         when {
@@ -696,6 +714,168 @@ private fun PhotoPlaceholder() {
         contentDescription = null,
         modifier = Modifier.size(32.dp),
         tint = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun PhotoViewerDialog(
+    photo: ProjectPhoto,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.fillMaxWidth(),
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = photo.fileName,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Close")
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(4f / 3f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        // Local photo with file path
+                        photo.isLocal && photo.filePath != null -> {
+                            val file = File(photo.filePath)
+                            if (file.exists()) {
+                                val bitmap = remember(photo.filePath) {
+                                    BitmapFactory.decodeFile(photo.filePath)
+                                }
+                                if (bitmap != null) {
+                                    Image(
+                                        bitmap = bitmap.asImageBitmap(),
+                                        contentDescription = photo.fileName,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Fit
+                                    )
+                                } else {
+                                    PhotoPlaceholder()
+                                }
+                            } else {
+                                PhotoPlaceholder()
+                            }
+                        }
+                        // Remote photo - use full image URL if available, otherwise thumbnail
+                        photo.fullImageUrl != null || photo.thumbnailUrl != null -> {
+                            var isLoading by remember { mutableStateOf(true) }
+                            var isError by remember { mutableStateOf(false) }
+
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(photo.fullImageUrl ?: photo.thumbnailUrl)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = photo.fileName,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit,
+                                    onLoading = { isLoading = true; isError = false },
+                                    onSuccess = { isLoading = false; isError = false },
+                                    onError = {
+                                        isLoading = false
+                                        isError = true
+                                    }
+                                )
+
+                                if (isLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.align(Alignment.Center)
+                                    )
+                                }
+
+                                if (isError) {
+                                    Column(
+                                        modifier = Modifier.align(Alignment.Center),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            Icons.Default.BrokenImage,
+                                            contentDescription = "Failed to load",
+                                            modifier = Modifier.size(48.dp),
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "Failed to load image",
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        else -> {
+                            PhotoPlaceholder()
+                        }
+                    }
+                }
+
+                // Photo metadata
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (photo.latitude != null && photo.longitude != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.LocationOn,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = String.format("%.5f, %.5f", photo.latitude, photo.longitude),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                if (photo.isLocal) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = "Not yet synced to server",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
     )
 }
 

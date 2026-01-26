@@ -298,6 +298,17 @@ mobile/app/src/main/java/com/barmm/ebarmm/
 | MinIO API | 9000 |
 | MinIO Console | 9001 |
 
+## Future Work / TODOs
+
+### Mobile App
+- **Photo/Video Compression**: Add compression before upload to save storage space and bandwidth
+  - Photos: Compress to ~80% quality JPEG, resize if over 2048px
+  - Videos: Consider using MediaCodec for H.264 compression with configurable quality
+
+### Backend
+- **Redis for Rate Limiting**: Currently using in-memory dictionaries for quota tracking; migrate to Redis for persistence across restarts
+- **Presigned URL Quota Bypass**: The `/media/presign-upload` and `/media/presign-download` endpoints bypass quota system; consider adding tracking
+
 ## Related Documentation
 
 All documentation is organized under `docs/`:
