@@ -51,6 +51,59 @@ s3_client = boto3.client(
 )
 
 
+@router.post("/presign-upload")
+async def presign_upload_simple(
+    request: Request,
+    body: dict,
+    current_user: User = Depends(require_role(['deo_user', 'regional_admin', 'super_admin'])),
+    db: Session = Depends(get_db)
+):
+    """
+    Simple presigned URL endpoint for mobile app.
+
+    Returns just a presigned URL and media key without creating a database record.
+    The mobile app will register the media separately after upload.
+    """
+    file_name = body.get("file_name", "upload")
+    content_type = body.get("content_type", "application/octet-stream")
+
+    # Generate unique storage key
+    media_id = uuid.uuid4()
+    file_extension = file_name.split('.')[-1] if '.' in file_name else ''
+
+    # Determine media type from content type
+    if content_type.startswith("image/"):
+        media_type = "photo"
+    elif content_type.startswith("video/"):
+        media_type = "video"
+    else:
+        media_type = "document"
+
+    storage_key = f"mobile/{media_type}s/{media_id}.{file_extension}"
+
+    try:
+        presigned_url = s3_client.generate_presigned_url(
+            'put_object',
+            Params={
+                'Bucket': settings.S3_BUCKET,
+                'Key': storage_key,
+                'ContentType': content_type
+            },
+            ExpiresIn=3600  # 1 hour for mobile uploads
+        )
+    except ClientError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate upload URL: {str(e)}"
+        )
+
+    return {
+        "upload_url": presigned_url,
+        "media_key": storage_key,
+        "expires_in": 3600
+    }
+
+
 @router.post("/upload-url", response_model=MediaUploadUrlResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("30/minute")
 async def request_upload_url(

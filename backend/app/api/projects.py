@@ -11,10 +11,25 @@ from uuid import UUID
 from datetime import datetime
 
 from ..core.database import get_db
-from ..models import Project, DEO, ProjectProgressLog, User, AuditLog
+from ..core.config import settings
+from ..models import Project, DEO, ProjectProgressLog, User, AuditLog, MediaAsset
 from ..schemas import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectListResponse
 from ..api.auth import get_current_user, require_role
 import uuid
+import boto3
+from botocore.client import Config
+from botocore.exceptions import ClientError
+
+# Initialize S3 client for media registration
+s3_client = boto3.client(
+    's3',
+    endpoint_url=settings.S3_ENDPOINT,
+    aws_access_key_id=settings.S3_ACCESS_KEY,
+    aws_secret_access_key=settings.S3_SECRET_KEY,
+    region_name=settings.S3_REGION,
+    config=Config(signature_version='s3v4'),
+    use_ssl=settings.S3_USE_SSL
+)
 
 router = APIRouter()
 
@@ -381,3 +396,149 @@ async def delete_project(
     db.commit()
 
     return None
+
+
+@router.post("/{project_id}/media")
+async def register_project_media(
+    project_id: UUID,
+    body: dict,
+    current_user: User = Depends(require_role(['deo_user', 'regional_admin', 'super_admin'])),
+    db: Session = Depends(get_db)
+):
+    """
+    Register media uploaded from mobile app.
+
+    This endpoint is called after the mobile app uploads a file to S3 using a presigned URL.
+    It creates a media_asset record linking the uploaded file to the project.
+
+    Body fields:
+    - media_key: S3 storage key (required)
+    - file_name: Original filename (required)
+    - file_size: File size in bytes (required)
+    - mime_type: MIME type of the file (required)
+    - latitude: GPS latitude (optional)
+    - longitude: GPS longitude (optional)
+    - progress_id: Link to progress report (optional)
+    """
+    # Verify project exists and user has access
+    project = db.query(Project).filter(Project.project_id == project_id).first()
+
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+
+    # RBAC check
+    if current_user.role == "deo_user" and project.deo_id != current_user.deo_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot register media for projects from another DEO"
+        )
+
+    media_key = body.get("media_key")
+    file_name = body.get("file_name")
+    file_size = body.get("file_size")
+    mime_type = body.get("mime_type")
+    latitude = body.get("latitude")
+    longitude = body.get("longitude")
+
+    if not media_key or not file_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="media_key and file_name are required"
+        )
+
+    # Determine media type from mime type
+    if mime_type and mime_type.startswith("image/"):
+        media_type = "photo"
+    elif mime_type and mime_type.startswith("video/"):
+        media_type = "video"
+    else:
+        media_type = "document"
+
+    # Verify file exists in S3
+    try:
+        s3_response = s3_client.head_object(
+            Bucket=settings.S3_BUCKET,
+            Key=media_key
+        )
+        # Use S3 file size if not provided
+        if not file_size:
+            file_size = s3_response.get('ContentLength')
+    except ClientError as e:
+        if e.response['Error']['Code'] == '404':
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"File not found in storage: {media_key}"
+            )
+        # Log but continue if we can't verify
+        pass
+
+    # Create media asset record
+    media_id = uuid.uuid4()
+    new_media = MediaAsset(
+        media_id=media_id,
+        project_id=project_id,
+        media_type=media_type,
+        storage_key=media_key,
+        latitude=latitude,
+        longitude=longitude,
+        uploaded_by=current_user.user_id,
+        uploaded_at=datetime.utcnow(),
+        file_size=file_size,
+        mime_type=mime_type,
+        attributes={
+            'filename': file_name,
+            'status': 'confirmed',
+            'source': 'mobile'
+        }
+    )
+
+    db.add(new_media)
+
+    # Audit log
+    audit_entry = AuditLog(
+        audit_id=uuid.uuid4(),
+        actor_id=current_user.user_id,
+        action="REGISTER_MOBILE_MEDIA",
+        entity_type="media_asset",
+        entity_id=media_id,
+        payload={
+            "project_id": str(project_id),
+            "media_type": media_type,
+            "storage_key": media_key
+        },
+        created_at=datetime.utcnow()
+    )
+    db.add(audit_entry)
+
+    db.commit()
+    db.refresh(new_media)
+
+    # Generate download URL
+    try:
+        download_url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={
+                'Bucket': settings.S3_BUCKET,
+                'Key': media_key
+            },
+            ExpiresIn=3600
+        )
+    except ClientError:
+        download_url = None
+
+    return {
+        "media_id": str(media_id),
+        "id": str(media_id),  # Alias for mobile compatibility
+        "project_id": str(project_id),
+        "media_type": media_type,
+        "storage_key": media_key,
+        "url": download_url,
+        "file_size": file_size,
+        "mime_type": mime_type,
+        "latitude": latitude,
+        "longitude": longitude,
+        "uploaded_at": new_media.uploaded_at.isoformat()
+    }
