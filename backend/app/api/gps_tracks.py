@@ -38,20 +38,20 @@ s3_client = boto3.client(
 
 
 def generate_video_url(media: MediaAsset) -> Optional[str]:
-    """Generate presigned URL for video file"""
-    if not media or not media.storage_key:
+    """
+    Generate URL for video file through backend proxy.
+
+    Uses the backend's /media/{id}/file endpoint instead of direct S3 URL.
+    This provides:
+    - Rate limiting (60 downloads/hour per IP)
+    - Authentication via JWT
+    - Caching
+    """
+    if not media or not media.media_id:
         return None
-    try:
-        return s3_client.generate_presigned_url(
-            'get_object',
-            Params={
-                'Bucket': settings.S3_BUCKET,
-                'Key': media.storage_key
-            },
-            ExpiresIn=3600  # 1 hour
-        )
-    except ClientError:
-        return None
+    # Return backend proxy URL instead of direct S3 URL
+    # This goes through rate limiting and authentication
+    return f"{settings.API_BASE_URL}/api/v1/media/{media.media_id}/file"
 
 
 @router.post("", response_model=GpsTrackResponse, status_code=status.HTTP_201_CREATED)

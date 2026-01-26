@@ -27,7 +27,7 @@ import com.barmm.ebarmm.data.local.database.entity.UserEntity
         SyncQueueEntity::class,
         GpsTrackEntity::class
     ],
-    version = 3,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -40,6 +40,67 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun gpsTrackDao(): GpsTrackDao
 
     companion object {
+        /**
+         * Migration from version 4 to 5: Add video_url column for remote video caching
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE gps_tracks ADD COLUMN video_url TEXT")
+            }
+        }
+
+        /**
+         * Migration from version 3 to 4: Make media_local_id nullable for server-only tracks
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // SQLite doesn't support ALTER COLUMN, so we need to recreate the table
+                // 1. Create new table with nullable media_local_id
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS gps_tracks_new (
+                        track_id TEXT PRIMARY KEY NOT NULL,
+                        media_local_id TEXT,
+                        project_id TEXT NOT NULL,
+                        server_id TEXT,
+                        waypoints_json TEXT NOT NULL,
+                        track_name TEXT NOT NULL,
+                        start_time INTEGER NOT NULL,
+                        end_time INTEGER,
+                        total_distance_meters REAL,
+                        waypoint_count INTEGER NOT NULL,
+                        gpx_file_path TEXT,
+                        kml_file_path TEXT,
+                        sync_status TEXT NOT NULL DEFAULT 'PENDING',
+                        sync_error TEXT,
+                        synced_at INTEGER,
+                        is_legacy_import INTEGER NOT NULL DEFAULT 0,
+                        legacy_routeshoot_id INTEGER,
+                        source_format TEXT NOT NULL DEFAULT 'app',
+                        original_kml_path TEXT,
+                        created_at INTEGER NOT NULL,
+                        FOREIGN KEY (media_local_id) REFERENCES media(local_id) ON DELETE CASCADE,
+                        FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+                    )
+                """.trimIndent())
+
+                // 2. Copy data from old table
+                db.execSQL("""
+                    INSERT INTO gps_tracks_new SELECT * FROM gps_tracks
+                """.trimIndent())
+
+                // 3. Drop old table
+                db.execSQL("DROP TABLE gps_tracks")
+
+                // 4. Rename new table to old name
+                db.execSQL("ALTER TABLE gps_tracks_new RENAME TO gps_tracks")
+
+                // 5. Recreate indexes
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_gps_tracks_media_local_id ON gps_tracks(media_local_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_gps_tracks_project_id ON gps_tracks(project_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_gps_tracks_sync_status ON gps_tracks(sync_status)")
+            }
+        }
+
         /**
          * Migration from version 2 to 3: Add GPS tracks table and video support fields
          */

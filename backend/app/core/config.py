@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     ENVIRONMENT: str = "production"
     API_V1_PREFIX: str = "/api/v1"
+    API_BASE_URL: str = "http://localhost:8000"  # Public-facing URL of the API
 
     # Database
     DATABASE_URL: str

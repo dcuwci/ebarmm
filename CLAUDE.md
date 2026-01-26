@@ -2,8 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-<!-- Last reviewed: 2026-01-26 -->
-<!-- Last updated: 2026-01-26 -->
+<!-- Last reviewed: 2026-01-27 -->
+<!-- Last updated: 2026-01-27 -->
 
 ## Important Reminders (Read First!)
 
@@ -36,6 +36,15 @@ docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --bui
 docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build           # Both
 ```
 
+### Staging Memory Issues
+- **Frontend builds can run out of memory** on small EC2 instances, causing the instance to become unresponsive
+- If the instance freezes during build, you may need to force stop/start from AWS Console
+- To reduce memory usage, build one service at a time with `--no-deps`:
+  ```bash
+  docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build frontend --no-deps
+  ```
+- Check memory before building: `free -m`
+
 ### Mobile Staging Build
 - In `build.gradle.kts`, **`initWith(getByName("debug"))` must come BEFORE `buildConfigField`** or the URL gets overwritten
 - Build staging APK: `./gradlew.bat clean assembleStaging` (Windows) or `./gradlew clean assembleStaging` (Mac/Linux)
@@ -44,6 +53,15 @@ docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --bui
 
 ### Known Issues Fixed in Code
 - **alerts.metadata vs alert_metadata**: The database column is `alert_metadata`, not `metadata`. Fixed in `backend/app/api/gis.py`.
+- **GPS track date parsing on mobile**: Server returns ISO dates without timezone (e.g., `"2026-01-26T14:13:32"`) but `Instant.parse()` requires timezone. Fixed with fallback to `LocalDateTime.parse()` in `ProjectDetailViewModel.kt`.
+- **Map max zoom**: Web maps use `maxZoom={22}` on MapContainer and `maxNativeZoom={19}` on TileLayer to allow overzooming beyond tile provider limits.
+- **GPS tracks from server need nullable mediaLocalId**: Server-synced GPS tracks don't have local video files, so `mediaLocalId` must be nullable. Fixed in database version 4.
+
+### Video Download Feature (Mobile)
+- GPS tracks from server can have videos downloaded on-demand
+- Videos are cached locally after first download (no re-download needed)
+- Rate limiting: 60 video downloads per hour per IP to control AWS costs
+- Requires `API_BASE_URL` in `.env.staging` (e.g., `http://YOUR_EC2_IP:8000`)
 
 ### Security
 - Never commit real secrets - only dev defaults (admin123, DevPassword123, minioadmin) are OK

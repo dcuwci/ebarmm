@@ -211,7 +211,17 @@ class ProjectDetailViewModel @Inject constructor(
         return try {
             val localTracks = gpsTrackDao.getTracksByProjectOnce(projectId)
             Timber.d("loadGpsTracks: Found ${localTracks.size} tracks in local database")
-            localTracks.map { track ->
+
+            // Deduplicate by serverId (keep first occurrence - which has local media if exists)
+            val deduplicatedTracks = localTracks
+                .groupBy { it.serverId ?: it.trackId } // Group by serverId, or trackId for local-only
+                .map { (_, tracks) ->
+                    // Prefer track with local media
+                    tracks.find { it.mediaLocalId != null } ?: tracks.first()
+                }
+            Timber.d("loadGpsTracks: After dedup: ${deduplicatedTracks.size} unique tracks")
+
+            deduplicatedTracks.map { track ->
                 Timber.d("loadGpsTracks: Local track ${track.trackId}, serverId=${track.serverId}, name=${track.trackName}")
                 GpsTrackInfo(
                     trackId = track.trackId,  // Always use local trackId
@@ -247,7 +257,7 @@ class ProjectDetailViewModel @Inject constructor(
             val entity = GpsTrackEntity(
                 trackId = java.util.UUID.randomUUID().toString(),
                 projectId = serverTrack.projectId,
-                mediaLocalId = "", // Server tracks don't have local media
+                mediaLocalId = null, // Server tracks don't have local media
                 trackName = serverTrack.trackName,
                 waypointsJson = waypointsJson,
                 waypointCount = serverTrack.waypointCount,
@@ -256,7 +266,8 @@ class ProjectDetailViewModel @Inject constructor(
                 endTime = serverTrack.endTime?.let { parseIsoDate(it) },
                 syncStatus = SyncStatus.SYNCED,
                 serverId = serverTrack.trackId,
-                syncedAt = System.currentTimeMillis()
+                syncedAt = System.currentTimeMillis(),
+                videoUrl = serverTrack.videoUrl
             )
             Timber.d("cacheGpsTrack: Inserting entity with trackId=${entity.trackId}, projectId=${entity.projectId}")
             gpsTrackDao.upsertTrack(entity)
@@ -386,8 +397,8 @@ class ProjectDetailViewModel @Inject constructor(
 
             // Show details of each track
             allTracks.forEach { track ->
-                val media = if (track.mediaLocalId.isNotEmpty()) {
-                    mediaDao.getMedia(track.mediaLocalId)
+                val media = if (!track.mediaLocalId.isNullOrEmpty()) {
+                    mediaDao.getMedia(track.mediaLocalId!!)
                 } else null
                 val videoStatus = media?.syncStatus?.name ?: "NO_VIDEO"
                 val videoServerId = media?.serverId?.take(8) ?: "null"

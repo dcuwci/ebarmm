@@ -667,7 +667,9 @@ async def get_media_thumbnail(
 
 
 @router.get("/{media_id}/file")
+@limiter.limit("60/hour")
 async def get_media_file(
+    request: Request,
     media_id: UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -678,6 +680,8 @@ async def get_media_file(
     This endpoint is useful for mobile apps that can't access MinIO directly.
     Returns the actual file content with proper content-type.
     Includes in-memory caching for frequently accessed files.
+
+    Rate limited: 60 requests per hour per IP to control AWS data transfer costs.
     """
     media = db.query(MediaAsset).filter(MediaAsset.media_id == media_id).first()
 

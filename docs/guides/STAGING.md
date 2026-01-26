@@ -525,6 +525,9 @@ JWT_SECRET_KEY=<JWT secret from setup script>
 
 # CORS (your Elastic IP)
 CORS_ORIGINS=["http://YOUR_ELASTIC_IP"]
+
+# API BASE URL (for mobile video downloads)
+API_BASE_URL=http://YOUR_ELASTIC_IP:8000
 ```
 
 ### 6.3 Quick Reference: Where to Get Each Value
@@ -540,6 +543,7 @@ CORS_ORIGINS=["http://YOUR_ELASTIC_IP"]
 | `S3_USE_SSL` | `true` (required for AWS S3) |
 | `JWT_SECRET_KEY` | Setup script output |
 | `CORS_ORIGINS` | Your Elastic IP |
+| `API_BASE_URL` | `http://YOUR_ELASTIC_IP:8000` (for video download URLs) |
 
 ---
 
@@ -723,6 +727,34 @@ Then restart the backend:
 ```bash
 docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build backend
 ```
+
+### Instance freezes during Docker build
+
+Building frontend/backend can exhaust memory on small instances (t3.small with 2GB RAM). Symptoms:
+- Instance becomes unresponsive
+- SSH connections hang
+- AWS Console shows instance stuck in "stopping" state
+
+**Prevention:**
+```bash
+# Check memory before building
+free -m
+
+# Build one service at a time with --no-deps to reduce memory usage
+docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build frontend --no-deps
+
+# Or build backend separately
+docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build backend --no-deps
+```
+
+**Recovery:**
+1. Go to AWS Console → EC2 → Instances
+2. Select the stuck instance
+3. Actions → Instance State → **Force Stop** (not regular Stop)
+4. Wait for state to change to "stopped" (may take several minutes)
+5. Actions → Instance State → Start
+
+**Recommendation:** Use t3.medium (4GB RAM) for staging to avoid this issue.
 
 ### Services won't start
 

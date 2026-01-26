@@ -39,9 +39,9 @@ data class GpsTrackEntity(
     @ColumnInfo(name = "track_id")
     val trackId: String,
 
-    /** Foreign key to associated video in MediaEntity */
+    /** Foreign key to associated video in MediaEntity (nullable for server-only tracks) */
     @ColumnInfo(name = "media_local_id")
-    val mediaLocalId: String,
+    val mediaLocalId: String?,
 
     /** Foreign key to project */
     @ColumnInfo(name = "project_id")
@@ -94,6 +94,10 @@ data class GpsTrackEntity(
     /** Timestamp when synced to server */
     @ColumnInfo(name = "synced_at")
     val syncedAt: Long? = null,
+
+    /** Remote video URL (for server-synced tracks without local video) */
+    @ColumnInfo(name = "video_url")
+    val videoUrl: String? = null,
 
     // ==========================================
     // Legacy compatibility fields

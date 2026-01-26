@@ -146,6 +146,9 @@ app/src/main/java/com/barmm/ebarmm/
 - Foreground service for continuous tracking
 - Exports to GPX/KML formats
 - Syncs video to S3, tracks to backend
+- **Video Download**: Tracks synced from server can have videos downloaded on-demand
+  - Videos are cached locally after first download
+  - Rate limited to 60 downloads/hour to control AWS costs
 
 ---
 
@@ -276,6 +279,13 @@ org.gradle.java.home=C:\\Program Files\\Android\\Android Studio\\jbr
 2. Verify backend is accessible
 3. Check Logcat for errors (filter by `com.barmm.ebarmm`)
 4. Manually trigger sync from UI
+
+### GPS Tracks from Web Not Showing
+If GPS tracks uploaded via web app don't appear on mobile:
+1. Pull down to refresh the project detail screen
+2. Check Logcat for `loadGpsTracks` messages
+3. Look for date parsing errors - the app handles both timezone-aware (`2026-01-26T14:13:32Z`) and naive (`2026-01-26T14:13:32`) ISO dates
+4. Verify the mobile app has network access to the staging server
 
 ---
 

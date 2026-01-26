@@ -70,8 +70,8 @@ class GpsTrackSyncWorker @AssistedInject constructor(
         try {
             // Step 1: Check if associated video is uploaded (if any)
             var videoServerId: String? = null
-            if (track.mediaLocalId.isNotEmpty()) {
-                val media = mediaDao.getMedia(track.mediaLocalId)
+            if (!track.mediaLocalId.isNullOrEmpty()) {
+                val media = mediaDao.getMedia(track.mediaLocalId!!)
                 if (media != null && media.syncStatus != SyncStatus.SYNCED) {
                     // Video not uploaded yet, skip this track for now
                     Timber.d("Skipping GPS track ${track.trackId} - video not yet uploaded")
