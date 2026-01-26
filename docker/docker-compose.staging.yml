@@ -40,6 +40,9 @@ services:
       # MFA
       MFA_ENABLED: "true"
       MFA_REQUIRED: "false"
+
+      # API Base URL (for generating video URLs in GPS tracks)
+      API_BASE_URL: ${API_BASE_URL}
     ports:
       - "8000:8000"
     extra_hosts:
