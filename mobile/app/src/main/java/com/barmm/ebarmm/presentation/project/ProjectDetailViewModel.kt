@@ -247,7 +247,13 @@ class ProjectDetailViewModel @Inject constructor(
                 .find { it.serverId == serverTrack.trackId }
 
             if (existingTrack != null) {
-                Timber.d("cacheGpsTrack: Track already exists locally, skipping")
+                // Update video URL if missing locally but present on server
+                if (existingTrack.videoUrl == null && serverTrack.videoUrl != null) {
+                    Timber.d("cacheGpsTrack: Updating videoUrl for existing track ${existingTrack.trackId}")
+                    gpsTrackDao.upsertTrack(existingTrack.copy(videoUrl = serverTrack.videoUrl))
+                } else {
+                    Timber.d("cacheGpsTrack: Track already exists locally, skipping")
+                }
                 return
             }
 
