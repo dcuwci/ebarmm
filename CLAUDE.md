@@ -43,11 +43,11 @@ docker-compose down                     # Stop all
 
 ### Staging (AWS EC2)
 ```bash
-# On EC2 instance
+# On EC2 instance (note: uses "docker compose" not "docker-compose")
 cd ~/ebarmm/docker
-docker-compose -f docker-compose.staging.yml --env-file .env.staging up -d    # Start staging
-docker-compose -f docker-compose.staging.yml logs -f backend                   # View logs
-docker-compose -f docker-compose.staging.yml down                              # Stop all
+docker compose -f docker-compose.staging.yml --env-file .env.staging up -d    # Start staging
+docker compose -f docker-compose.staging.yml logs -f backend                   # View logs
+docker compose -f docker-compose.staging.yml down                              # Stop all
 ```
 See `STAGING.md` for full AWS setup guide.
 
