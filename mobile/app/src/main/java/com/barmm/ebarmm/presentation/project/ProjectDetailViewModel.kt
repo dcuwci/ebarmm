@@ -228,11 +228,12 @@ class ProjectDetailViewModel @Inject constructor(
             // Backend fetch failed, continue with local photos
         }
 
-        // Add local photos not yet synced
+        // Add local photos not yet synced (skip those with serverId - they're already in the list from backend)
         try {
             val localPhotos = mediaDao.getMediaByProject(projectId).first()
             localPhotos.forEach { media ->
-                if (media.localId !in existingIds) {
+                // Only add if NOT synced (no serverId) and not already in list
+                if (media.serverId == null && media.localId !in existingIds) {
                     photos.add(
                         ProjectPhoto(
                             mediaId = media.localId,
