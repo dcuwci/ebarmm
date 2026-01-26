@@ -38,6 +38,8 @@ import {
 import { fetchProjectGpsTracks, formatDistance, formatDuration } from '../../api/gps-tracks'
 import { format } from 'date-fns'
 import type { GpsTrack, GpsWaypoint } from '../../types/gps-tracks'
+import { useAuthStore } from '../../stores/authStore'
+import CircularProgress from '@mui/material/CircularProgress'
 
 // Import leaflet CSS
 import 'leaflet/dist/leaflet.css'
@@ -75,6 +77,55 @@ function TrackPlayer({ track, onClose }: TrackPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+
+  // Video loading state for authenticated fetch
+  const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null)
+  const [videoLoading, setVideoLoading] = useState(false)
+  const [videoError, setVideoError] = useState<string | null>(null)
+  const token = useAuthStore((state) => state.token)
+
+  // Fetch video with auth token and create blob URL
+  useEffect(() => {
+    if (!track.video_url || videoBlobUrl) return
+
+    const fetchVideo = async () => {
+      setVideoLoading(true)
+      setVideoError(null)
+
+      try {
+        const response = await fetch(track.video_url!, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          if (response.status === 429) {
+            const data = await response.json()
+            throw new Error(data.detail || 'Download limit reached. Try again later.')
+          }
+          throw new Error(`Failed to load video: ${response.status}`)
+        }
+
+        const blob = await response.blob()
+        const blobUrl = URL.createObjectURL(blob)
+        setVideoBlobUrl(blobUrl)
+      } catch (err) {
+        setVideoError(err instanceof Error ? err.message : 'Failed to load video')
+      } finally {
+        setVideoLoading(false)
+      }
+    }
+
+    fetchVideo()
+
+    // Cleanup blob URL on unmount
+    return () => {
+      if (videoBlobUrl) {
+        URL.revokeObjectURL(videoBlobUrl)
+      }
+    }
+  }, [track.video_url, token, videoBlobUrl])
 
   // Get waypoints array
   const waypoints: GpsWaypoint[] = track.waypoints || []
@@ -186,24 +237,41 @@ function TrackPlayer({ track, onClose }: TrackPlayerProps) {
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'grey.900' }}>
               {track.video_url ? (
                 <>
-                  <Box
-                    component="video"
-                    ref={videoRef}
-                    src={track.video_url}
-                    onTimeUpdate={handleTimeUpdate}
-                    onLoadedMetadata={handleLoadedMetadata}
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                    onClick={togglePlayPause}
-                    sx={{
-                      width: '100%',
-                      flex: 1,
-                      minHeight: 0,
-                      objectFit: 'contain',
-                      bgcolor: 'black',
-                      cursor: 'pointer'
-                    }}
-                  />
+                  {/* Loading state */}
+                  {videoLoading && (
+                    <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 2 }}>
+                      <CircularProgress sx={{ color: 'white' }} />
+                      <Typography sx={{ color: 'grey.400' }}>Loading video...</Typography>
+                    </Box>
+                  )}
+                  {/* Error state */}
+                  {videoError && (
+                    <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 2, p: 2 }}>
+                      <Film size={48} color="#f44336" />
+                      <Typography sx={{ color: 'error.main', textAlign: 'center' }}>{videoError}</Typography>
+                    </Box>
+                  )}
+                  {/* Video player */}
+                  {videoBlobUrl && !videoLoading && !videoError && (
+                    <Box
+                      component="video"
+                      ref={videoRef}
+                      src={videoBlobUrl}
+                      onTimeUpdate={handleTimeUpdate}
+                      onLoadedMetadata={handleLoadedMetadata}
+                      onPlay={() => setIsPlaying(true)}
+                      onPause={() => setIsPlaying(false)}
+                      onClick={togglePlayPause}
+                      sx={{
+                        width: '100%',
+                        flex: 1,
+                        minHeight: 0,
+                        objectFit: 'contain',
+                        bgcolor: 'black',
+                        cursor: 'pointer'
+                      }}
+                    />
+                  )}
                   {/* Custom seek bar */}
                   <Box sx={{ px: 2, py: 1.5, bgcolor: 'grey.800', flexShrink: 0 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
