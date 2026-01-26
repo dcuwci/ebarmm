@@ -32,10 +32,10 @@ android {
         }
 
         create("staging") {
-            // Staging server - update with your EC2 Elastic IP
-            // Example: "http://54.123.45.67:8000"
-            buildConfigField("String", "API_BASE_URL", "\"http://STAGING_SERVER_IP:8000\"")
+            // Copy debug settings first, then override URL
             initWith(getByName("debug"))
+            // Staging server - update with your EC2 Elastic IP
+            buildConfigField("String", "API_BASE_URL", "\"http://35.73.5.94:8000\"")
             isDebuggable = true
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
