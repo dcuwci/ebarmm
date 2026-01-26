@@ -14,22 +14,22 @@ import retrofit2.http.Path
  */
 interface GpsTrackApi {
 
-    @POST("gps-tracks")
+    @POST("/api/v1/gps-tracks")
     suspend fun createGpsTrack(
         @Body request: GpsTrackCreateRequest
     ): Response<GpsTrackResponse>
 
-    @GET("gps-tracks/project/{projectId}")
+    @GET("/api/v1/gps-tracks/project/{projectId}")
     suspend fun getProjectGpsTracks(
         @Path("projectId") projectId: String
     ): Response<List<GpsTrackResponse>>
 
-    @GET("gps-tracks/{trackId}")
+    @GET("/api/v1/gps-tracks/{trackId}")
     suspend fun getGpsTrack(
         @Path("trackId") trackId: String
     ): Response<GpsTrackResponse>
 
-    @DELETE("gps-tracks/{trackId}")
+    @DELETE("/api/v1/gps-tracks/{trackId}")
     suspend fun deleteGpsTrack(
         @Path("trackId") trackId: String
     ): Response<Unit>

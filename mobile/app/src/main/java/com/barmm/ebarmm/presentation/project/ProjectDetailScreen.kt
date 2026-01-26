@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -46,6 +48,11 @@ fun ProjectDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
+
+    // Sync debug dialog state
+    var showSyncDebugDialog by remember { mutableStateOf(false) }
+    var syncDebugInfo by remember { mutableStateOf("Loading...") }
 
     LaunchedEffect(projectId) {
         viewModel.loadProject(projectId)
@@ -61,6 +68,30 @@ fun ProjectDetailScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Sync debug dialog
+    if (showSyncDebugDialog) {
+        AlertDialog(
+            onDismissRequest = { showSyncDebugDialog = false },
+            title = { Text("Sync Status") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = syncDebugInfo,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSyncDebugDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -431,6 +462,21 @@ fun ProjectDetailScreen(
                                         Icon(
                                             Icons.Default.Videocam,
                                             contentDescription = "Record Route"
+                                        )
+                                    }
+                                    // Sync debug button
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            scope.launch {
+                                                syncDebugInfo = "Loading..."
+                                                showSyncDebugDialog = true
+                                                syncDebugInfo = viewModel.getSyncDebugInfo(projectId)
+                                            }
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Sync,
+                                            contentDescription = "Sync Info"
                                         )
                                     }
                                 }

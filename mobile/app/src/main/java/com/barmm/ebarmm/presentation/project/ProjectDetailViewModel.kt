@@ -9,6 +9,7 @@ import com.barmm.ebarmm.data.local.database.dao.ProjectDao
 import com.barmm.ebarmm.data.local.database.entity.GpsTrackEntity
 import com.barmm.ebarmm.data.local.database.entity.ProgressEntity
 import com.barmm.ebarmm.data.local.database.entity.ProjectEntity
+import com.barmm.ebarmm.data.local.database.entity.SyncStatus
 import com.barmm.ebarmm.data.remote.api.MediaApi
 import com.barmm.ebarmm.data.remote.api.ProjectApi
 import com.barmm.ebarmm.data.remote.dto.ProjectResponse
@@ -257,5 +258,62 @@ class ProjectDetailViewModel @Inject constructor(
         }
 
         return photos
+    }
+
+    /**
+     * Debug function to check sync status of media and GPS tracks
+     */
+    suspend fun getSyncDebugInfo(projectId: String): String {
+        val sb = StringBuilder()
+
+        try {
+            // Check pending media
+            val allMedia = mediaDao.getMediaByProject(projectId).first()
+            val pendingMedia = allMedia.filter { it.syncStatus == SyncStatus.PENDING }
+            val syncedMedia = allMedia.filter { it.syncStatus == SyncStatus.SYNCED }
+            val failedMedia = allMedia.filter { it.syncStatus == SyncStatus.FAILED }
+
+            sb.appendLine("=== MEDIA ===")
+            sb.appendLine("Total: ${allMedia.size}")
+            sb.appendLine("Synced: ${syncedMedia.size}")
+            sb.appendLine("Pending: ${pendingMedia.size}")
+            sb.appendLine("Failed: ${failedMedia.size}")
+
+            // Show details of each media
+            allMedia.forEach { media ->
+                sb.appendLine("- ${media.fileName}: ${media.syncStatus}, serverId=${media.serverId?.take(8) ?: "null"}")
+            }
+
+            // Check pending GPS tracks
+            val allTracks = gpsTrackDao.getTracksByProjectOnce(projectId)
+            val pendingTracks = allTracks.filter { it.syncStatus == SyncStatus.PENDING }
+            val syncedTracks = allTracks.filter { it.syncStatus == SyncStatus.SYNCED }
+            val failedTracks = allTracks.filter { it.syncStatus == SyncStatus.FAILED }
+
+            sb.appendLine("\n=== GPS TRACKS ===")
+            sb.appendLine("Total: ${allTracks.size}")
+            sb.appendLine("Synced: ${syncedTracks.size}")
+            sb.appendLine("Pending: ${pendingTracks.size}")
+            sb.appendLine("Failed: ${failedTracks.size}")
+
+            // Show details of each track
+            allTracks.forEach { track ->
+                val media = if (track.mediaLocalId.isNotEmpty()) {
+                    mediaDao.getMedia(track.mediaLocalId)
+                } else null
+                val videoStatus = media?.syncStatus?.name ?: "NO_VIDEO"
+                val videoServerId = media?.serverId?.take(8) ?: "null"
+                sb.appendLine("- ${track.trackName}: ${track.syncStatus}")
+                sb.appendLine("  Video status: $videoStatus, serverId=$videoServerId")
+                if (track.syncError != null) {
+                    sb.appendLine("  Error: ${track.syncError}")
+                }
+            }
+
+        } catch (e: Exception) {
+            sb.appendLine("Error getting debug info: ${e.message}")
+        }
+
+        return sb.toString()
     }
 }
