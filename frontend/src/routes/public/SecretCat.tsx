@@ -4,12 +4,43 @@
  * A festive celebration page for those who found the hidden cat!
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import { useNavigate } from 'react-router-dom';
 import { Cat, Sparkles, PartyPopper } from 'lucide-react';
+
+// Meow sound synthesizer using Web Audio API
+const createMeowSound = (audioContext: AudioContext) => {
+  const now = audioContext.currentTime;
+
+  // Create oscillator for the meow
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+
+  // Connect nodes
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+
+  // Meow frequency envelope (starts high, dips, rises slightly)
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(700 + Math.random() * 200, now);
+  oscillator.frequency.exponentialRampToValueAtTime(500 + Math.random() * 100, now + 0.1);
+  oscillator.frequency.exponentialRampToValueAtTime(400 + Math.random() * 100, now + 0.2);
+  oscillator.frequency.exponentialRampToValueAtTime(350 + Math.random() * 50, now + 0.3);
+
+  // Volume envelope
+  gainNode.gain.setValueAtTime(0, now);
+  gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
+  gainNode.gain.linearRampToValueAtTime(0.2, now + 0.15);
+  gainNode.gain.linearRampToValueAtTime(0.15, now + 0.25);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+
+  // Start and stop
+  oscillator.start(now);
+  oscillator.stop(now + 0.4);
+};
 
 // Firework particle type
 interface Particle {
@@ -44,9 +75,25 @@ const SecretCat: React.FC = () => {
   const [particles, setParticles] = useState<Particle[]>([]);
   const [cats, setCats] = useState<BouncingCat[]>([]);
   const [confetti, setConfetti] = useState<{ id: number; x: number; delay: number; color: string }[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  // Initialize audio context and play meow
+  const playMeow = useCallback(() => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume();
+      }
+      createMeowSound(audioContextRef.current);
+    } catch {
+      // Audio not supported, silently ignore
+    }
+  }, []);
 
   // Create a firework burst
-  const createFirework = useCallback((x: number, y: number) => {
+  const createFirework = useCallback((x: number, y: number, withMeow = false) => {
     const newParticles: Particle[] = [];
     const color = FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)];
     const particleCount = 30 + Math.floor(Math.random() * 20);
@@ -67,7 +114,12 @@ const SecretCat: React.FC = () => {
     }
 
     setParticles(prev => [...prev, ...newParticles]);
-  }, []);
+
+    // Play meow sound on user clicks
+    if (withMeow) {
+      playMeow();
+    }
+  }, [playMeow]);
 
   // Initialize bouncing cats
   useEffect(() => {
@@ -173,6 +225,26 @@ const SecretCat: React.FC = () => {
     return () => clearInterval(interval);
   }, [createFirework]);
 
+  // Random meows from bouncing cats
+  useEffect(() => {
+    // Play initial meow after a short delay (user interaction may be needed)
+    const initialMeow = setTimeout(() => {
+      playMeow();
+    }, 500);
+
+    // Random meows every 2-5 seconds
+    const meowInterval = setInterval(() => {
+      if (Math.random() > 0.5) {
+        playMeow();
+      }
+    }, 2000 + Math.random() * 3000);
+
+    return () => {
+      clearTimeout(initialMeow);
+      clearInterval(meowInterval);
+    };
+  }, [playMeow]);
+
   return (
     <Box
       sx={{
@@ -185,7 +257,7 @@ const SecretCat: React.FC = () => {
         overflow: 'hidden',
         cursor: 'pointer',
       }}
-      onClick={(e) => createFirework(e.clientX, e.clientY)}
+      onClick={(e) => createFirework(e.clientX, e.clientY, true)}
     >
       {/* Starfield background */}
       <Box
