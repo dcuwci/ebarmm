@@ -14,32 +14,67 @@ import { Cat, Sparkles, PartyPopper } from 'lucide-react';
 // Meow sound synthesizer using Web Audio API
 const createMeowSound = (audioContext: AudioContext) => {
   const now = audioContext.currentTime;
+  const duration = 0.5 + Math.random() * 0.3;
+  const baseFreq = 300 + Math.random() * 100;
 
-  // Create oscillator for the meow
-  const oscillator = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
+  // Main oscillator (fundamental frequency)
+  const osc1 = audioContext.createOscillator();
+  const gain1 = audioContext.createGain();
+  osc1.type = 'sawtooth';
+  osc1.connect(gain1);
 
-  // Connect nodes
-  oscillator.connect(gainNode);
-  gainNode.connect(audioContext.destination);
+  // Second oscillator (harmonic, slightly detuned for richness)
+  const osc2 = audioContext.createOscillator();
+  const gain2 = audioContext.createGain();
+  osc2.type = 'triangle';
+  osc2.connect(gain2);
 
-  // Meow frequency envelope (starts high, dips, rises slightly)
-  oscillator.type = 'sine';
-  oscillator.frequency.setValueAtTime(700 + Math.random() * 200, now);
-  oscillator.frequency.exponentialRampToValueAtTime(500 + Math.random() * 100, now + 0.1);
-  oscillator.frequency.exponentialRampToValueAtTime(400 + Math.random() * 100, now + 0.2);
-  oscillator.frequency.exponentialRampToValueAtTime(350 + Math.random() * 50, now + 0.3);
+  // Filter to shape the sound (cats have a nasal quality)
+  const filter = audioContext.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.setValueAtTime(800, now);
+  filter.Q.setValueAtTime(2, now);
 
-  // Volume envelope
-  gainNode.gain.setValueAtTime(0, now);
-  gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
-  gainNode.gain.linearRampToValueAtTime(0.2, now + 0.15);
-  gainNode.gain.linearRampToValueAtTime(0.15, now + 0.25);
-  gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+  // Connect through filter to destination
+  gain1.connect(filter);
+  gain2.connect(filter);
+  filter.connect(audioContext.destination);
+
+  // Meow pitch envelope: "me-OW" - rises then falls
+  // Start low, rise to peak, then fall
+  osc1.frequency.setValueAtTime(baseFreq * 0.8, now);
+  osc1.frequency.linearRampToValueAtTime(baseFreq * 1.8, now + duration * 0.3);
+  osc1.frequency.linearRampToValueAtTime(baseFreq * 1.5, now + duration * 0.5);
+  osc1.frequency.exponentialRampToValueAtTime(baseFreq * 0.6, now + duration);
+
+  // Second oscillator follows but higher (harmonic)
+  osc2.frequency.setValueAtTime(baseFreq * 1.6, now);
+  osc2.frequency.linearRampToValueAtTime(baseFreq * 3.2, now + duration * 0.3);
+  osc2.frequency.linearRampToValueAtTime(baseFreq * 2.8, now + duration * 0.5);
+  osc2.frequency.exponentialRampToValueAtTime(baseFreq * 1.2, now + duration);
+
+  // Filter sweep (opens up then closes)
+  filter.frequency.setValueAtTime(600, now);
+  filter.frequency.linearRampToValueAtTime(1500, now + duration * 0.3);
+  filter.frequency.linearRampToValueAtTime(800, now + duration);
+
+  // Volume envelope - quick attack, sustain, fade
+  gain1.gain.setValueAtTime(0, now);
+  gain1.gain.linearRampToValueAtTime(0.15, now + 0.03);
+  gain1.gain.linearRampToValueAtTime(0.12, now + duration * 0.4);
+  gain1.gain.linearRampToValueAtTime(0.08, now + duration * 0.7);
+  gain1.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+  gain2.gain.setValueAtTime(0, now);
+  gain2.gain.linearRampToValueAtTime(0.08, now + 0.03);
+  gain2.gain.linearRampToValueAtTime(0.06, now + duration * 0.4);
+  gain2.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
   // Start and stop
-  oscillator.start(now);
-  oscillator.stop(now + 0.4);
+  osc1.start(now);
+  osc2.start(now);
+  osc1.stop(now + duration + 0.1);
+  osc2.stop(now + duration + 0.1);
 };
 
 // Firework particle type
