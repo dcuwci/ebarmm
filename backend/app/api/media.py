@@ -9,13 +9,15 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import and_
-from typing import List, Optional
+from typing import List, Optional, Dict
 from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import uuid
 import boto3
 from botocore.client import Config
 from botocore.exceptions import ClientError
+from collections import defaultdict
+import threading
 
 from ..core.database import get_db
 from ..core.config import settings
@@ -38,6 +40,81 @@ from slowapi.util import get_remote_address
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
+
+# =============================================================================
+# Download Quota System
+# Prevents abuse by limiting downloads per user per day
+# =============================================================================
+
+# Configuration
+DAILY_VIDEO_DOWNLOAD_LIMIT = 20  # Max video downloads per user per day
+DAILY_PHOTO_DOWNLOAD_LIMIT = 200  # Max photo downloads per user per day
+DAILY_TOTAL_BYTES_LIMIT = 500 * 1024 * 1024  # 500MB per user per day
+
+# In-memory storage (use Redis in production for persistence across restarts)
+# Structure: {user_id: {"date": date, "video_count": int, "photo_count": int, "bytes": int}}
+_download_quota: Dict[str, dict] = defaultdict(lambda: {"date": None, "video_count": 0, "photo_count": 0, "bytes": 0})
+_quota_lock = threading.Lock()
+
+
+def check_and_update_quota(user_id: str, media_type: str, file_size: int) -> tuple[bool, str]:
+    """
+    Check if user has remaining quota and update if allowed.
+
+    Returns: (allowed: bool, reason: str)
+    """
+    with _quota_lock:
+        today = date.today()
+        user_quota = _download_quota[str(user_id)]
+
+        # Reset quota if new day
+        if user_quota["date"] != today:
+            user_quota["date"] = today
+            user_quota["video_count"] = 0
+            user_quota["photo_count"] = 0
+            user_quota["bytes"] = 0
+
+        # Check byte limit
+        if user_quota["bytes"] + file_size > DAILY_TOTAL_BYTES_LIMIT:
+            remaining_mb = (DAILY_TOTAL_BYTES_LIMIT - user_quota["bytes"]) / (1024 * 1024)
+            return False, f"Daily download limit reached (500MB). Remaining: {remaining_mb:.1f}MB. Resets at midnight UTC."
+
+        # Check count limit based on media type
+        if media_type == "video":
+            if user_quota["video_count"] >= DAILY_VIDEO_DOWNLOAD_LIMIT:
+                return False, f"Daily video download limit reached ({DAILY_VIDEO_DOWNLOAD_LIMIT} videos). Resets at midnight UTC."
+            user_quota["video_count"] += 1
+        else:  # photo or other
+            if user_quota["photo_count"] >= DAILY_PHOTO_DOWNLOAD_LIMIT:
+                return False, f"Daily photo download limit reached ({DAILY_PHOTO_DOWNLOAD_LIMIT} photos). Resets at midnight UTC."
+            user_quota["photo_count"] += 1
+
+        # Update bytes
+        user_quota["bytes"] += file_size
+
+        return True, "OK"
+
+
+def get_user_quota_status(user_id: str) -> dict:
+    """Get current quota status for a user."""
+    with _quota_lock:
+        today = date.today()
+        user_quota = _download_quota[str(user_id)]
+
+        if user_quota["date"] != today:
+            return {
+                "video_remaining": DAILY_VIDEO_DOWNLOAD_LIMIT,
+                "photo_remaining": DAILY_PHOTO_DOWNLOAD_LIMIT,
+                "bytes_remaining": DAILY_TOTAL_BYTES_LIMIT,
+                "resets_at": "midnight UTC"
+            }
+
+        return {
+            "video_remaining": DAILY_VIDEO_DOWNLOAD_LIMIT - user_quota["video_count"],
+            "photo_remaining": DAILY_PHOTO_DOWNLOAD_LIMIT - user_quota["photo_count"],
+            "bytes_remaining": DAILY_TOTAL_BYTES_LIMIT - user_quota["bytes"],
+            "resets_at": "midnight UTC"
+        }
 
 # Initialize S3 client
 s3_client = boto3.client(
@@ -682,6 +759,7 @@ async def get_media_file(
     Includes in-memory caching for frequently accessed files.
 
     Rate limited: 60 requests per hour per IP to control AWS data transfer costs.
+    Daily quota: 20 videos, 200 photos, or 500MB total per user per day.
     """
     media = db.query(MediaAsset).filter(MediaAsset.media_id == media_id).first()
 
@@ -697,6 +775,20 @@ async def get_media_file(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this media asset"
+        )
+
+    # Check daily quota BEFORE downloading from S3
+    file_size = media.file_size or 0
+    allowed, reason = check_and_update_quota(
+        user_id=str(current_user.user_id),
+        media_type=media.media_type or "photo",
+        file_size=file_size
+    )
+
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=reason
         )
 
     try:
@@ -732,6 +824,29 @@ async def get_media_file(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve file: {str(e)}"
         )
+
+
+@router.get("/quota/status")
+async def get_quota_status(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get current user's download quota status.
+
+    Returns remaining downloads and bytes for today.
+    Quotas reset at midnight UTC.
+    """
+    status = get_user_quota_status(str(current_user.user_id))
+    return {
+        "user_id": str(current_user.user_id),
+        "limits": {
+            "daily_video_downloads": DAILY_VIDEO_DOWNLOAD_LIMIT,
+            "daily_photo_downloads": DAILY_PHOTO_DOWNLOAD_LIMIT,
+            "daily_bytes": DAILY_TOTAL_BYTES_LIMIT
+        },
+        "remaining": status,
+        "message": f"You can download {status['video_remaining']} more videos and {status['photo_remaining']} more photos today."
+    }
 
 
 @router.post("/admin/generate-thumbnails")

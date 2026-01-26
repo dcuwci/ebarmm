@@ -216,6 +216,18 @@ class RouteShootPlayerViewModel @Inject constructor(
 
             okHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
+                    // Handle quota exceeded (429 Too Many Requests)
+                    if (response.code == 429) {
+                        val errorBody = response.body?.string() ?: "Daily download limit reached"
+                        // Try to extract the detail message from JSON response
+                        val detailMessage = try {
+                            val json = org.json.JSONObject(errorBody)
+                            json.optString("detail", "Daily download limit reached. Try again tomorrow.")
+                        } catch (e: Exception) {
+                            "Daily download limit reached. Try again tomorrow."
+                        }
+                        return@withContext Result.failure(Exception(detailMessage))
+                    }
                     return@withContext Result.failure(Exception("Download failed: HTTP ${response.code}"))
                 }
 
