@@ -4,13 +4,15 @@ Read-only public access for transparency portal (no authentication)
 """
 
 import io
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, case
-from typing import List, Optional
+from typing import List, Optional, Dict
 from uuid import UUID
 from datetime import date
+from collections import defaultdict
+import threading
 import json
 
 from ..core.database import get_db
@@ -21,6 +23,154 @@ from slowapi.util import get_remote_address
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
+
+# =============================================================================
+# IP-Based Download Quota System for Public Endpoints
+# Prevents abuse from unauthenticated users
+# =============================================================================
+
+# Configuration - stricter limits for public/anonymous access
+PUBLIC_DAILY_VIDEO_LIMIT = 10  # Max videos per IP per day
+PUBLIC_DAILY_PHOTO_LIMIT = 100  # Max photos per IP per day
+PUBLIC_DAILY_BYTES_LIMIT = 200 * 1024 * 1024  # 200MB per IP per day
+PUBLIC_HOURLY_REQUEST_LIMIT = 300  # Max requests per IP per hour (spam prevention)
+
+# In-memory storage keyed by IP
+# Structure: {ip: {"date": date, "video_count": int, "photo_count": int, "bytes": int, "hourly_requests": int, "hour": int}}
+_public_quota: Dict[str, dict] = defaultdict(lambda: {
+    "date": None, "video_count": 0, "photo_count": 0, "bytes": 0,
+    "hour": None, "hourly_requests": 0
+})
+_public_quota_lock = threading.Lock()
+
+
+def get_client_ip(request: Request) -> str:
+    """Extract real client IP, handling proxies."""
+    # Check X-Forwarded-For header (set by reverse proxies)
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        # First IP in the list is the original client
+        return forwarded.split(",")[0].strip()
+    # Check X-Real-IP header
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+    # Fallback to direct client IP
+    return request.client.host if request.client else "unknown"
+
+
+def check_public_quota(request: Request, media_type: str, file_size: int) -> tuple[bool, str]:
+    """
+    Check if IP has remaining quota for public downloads.
+    Also enforces hourly request limit to prevent spam.
+
+    Returns: (allowed: bool, reason: str)
+    """
+    ip = get_client_ip(request)
+
+    with _public_quota_lock:
+        today = date.today()
+        current_hour = date.today().toordinal() * 24 + __import__('datetime').datetime.now().hour
+        quota = _public_quota[ip]
+
+        # Reset daily quota if new day
+        if quota["date"] != today:
+            quota["date"] = today
+            quota["video_count"] = 0
+            quota["photo_count"] = 0
+            quota["bytes"] = 0
+
+        # Reset hourly counter if new hour
+        if quota["hour"] != current_hour:
+            quota["hour"] = current_hour
+            quota["hourly_requests"] = 0
+
+        # Check hourly spam limit FIRST
+        if quota["hourly_requests"] >= PUBLIC_HOURLY_REQUEST_LIMIT:
+            return False, f"Too many requests. Please wait until the next hour. (Limit: {PUBLIC_HOURLY_REQUEST_LIMIT}/hour)"
+
+        # Check byte limit
+        if quota["bytes"] + file_size > PUBLIC_DAILY_BYTES_LIMIT:
+            remaining_mb = (PUBLIC_DAILY_BYTES_LIMIT - quota["bytes"]) / (1024 * 1024)
+            return False, f"Daily download limit reached (200MB for public access). Remaining: {remaining_mb:.1f}MB."
+
+        # Check count limit based on media type
+        if media_type == "video":
+            if quota["video_count"] >= PUBLIC_DAILY_VIDEO_LIMIT:
+                return False, f"Daily video limit reached ({PUBLIC_DAILY_VIDEO_LIMIT} videos for public access)."
+            quota["video_count"] += 1
+        else:
+            if quota["photo_count"] >= PUBLIC_DAILY_PHOTO_LIMIT:
+                return False, f"Daily photo limit reached ({PUBLIC_DAILY_PHOTO_LIMIT} photos for public access)."
+            quota["photo_count"] += 1
+
+        # Update counters
+        quota["bytes"] += file_size
+        quota["hourly_requests"] += 1
+
+        return True, "OK"
+
+
+def increment_hourly_request(request: Request):
+    """Increment hourly request counter without checking quota (for non-download requests)."""
+    ip = get_client_ip(request)
+
+    with _public_quota_lock:
+        current_hour = date.today().toordinal() * 24 + __import__('datetime').datetime.now().hour
+        quota = _public_quota[ip]
+
+        if quota["hour"] != current_hour:
+            quota["hour"] = current_hour
+            quota["hourly_requests"] = 0
+
+        quota["hourly_requests"] += 1
+
+
+@router.get("/quota/status")
+async def get_public_quota_status(request: Request):
+    """
+    Get current IP's download quota status (no authentication).
+
+    Returns remaining downloads for today. Quotas reset at midnight UTC.
+    """
+    ip = get_client_ip(request)
+
+    with _public_quota_lock:
+        today = date.today()
+        current_hour = date.today().toordinal() * 24 + __import__('datetime').datetime.now().hour
+        quota = _public_quota[ip]
+
+        # Calculate remaining based on current state
+        if quota["date"] != today:
+            video_remaining = PUBLIC_DAILY_VIDEO_LIMIT
+            photo_remaining = PUBLIC_DAILY_PHOTO_LIMIT
+            bytes_remaining = PUBLIC_DAILY_BYTES_LIMIT
+        else:
+            video_remaining = PUBLIC_DAILY_VIDEO_LIMIT - quota["video_count"]
+            photo_remaining = PUBLIC_DAILY_PHOTO_LIMIT - quota["photo_count"]
+            bytes_remaining = PUBLIC_DAILY_BYTES_LIMIT - quota["bytes"]
+
+        if quota["hour"] != current_hour:
+            hourly_remaining = PUBLIC_HOURLY_REQUEST_LIMIT
+        else:
+            hourly_remaining = PUBLIC_HOURLY_REQUEST_LIMIT - quota["hourly_requests"]
+
+    return {
+        "ip": ip[:10] + "..." if len(ip) > 10 else ip,  # Partially mask IP
+        "limits": {
+            "daily_video_downloads": PUBLIC_DAILY_VIDEO_LIMIT,
+            "daily_photo_downloads": PUBLIC_DAILY_PHOTO_LIMIT,
+            "daily_bytes": PUBLIC_DAILY_BYTES_LIMIT,
+            "hourly_requests": PUBLIC_HOURLY_REQUEST_LIMIT
+        },
+        "remaining": {
+            "video_remaining": max(0, video_remaining),
+            "photo_remaining": max(0, photo_remaining),
+            "bytes_remaining": max(0, bytes_remaining),
+            "hourly_requests_remaining": max(0, hourly_remaining)
+        },
+        "resets_at": "midnight UTC (daily) / top of hour (hourly)"
+    }
 
 
 @router.get("/projects", response_model=dict)
@@ -588,7 +738,9 @@ async def get_public_geotagged_media(
 
 
 @router.get("/media/{media_id}/thumbnail")
+@limiter.limit("60/minute")  # Rate limit URL generation
 async def get_public_media_thumbnail(
+    request: Request,
     media_id: UUID,
     db: Session = Depends(get_db)
 ):
@@ -597,7 +749,12 @@ async def get_public_media_thumbnail(
 
     Returns pre-signed URL for media asset if it belongs to a non-deleted project.
     Only returns confirmed uploads.
+
+    Note: This returns a presigned S3 URL. The actual download from S3 is not
+    quota-controlled. Use /media/{id}/file endpoint for quota-controlled access.
     """
+    # Increment hourly request counter for spam prevention
+    increment_hourly_request(request)
     # Import boto3 client from media API
     from ..api.media import s3_client
     from ..core.config import settings
@@ -642,7 +799,7 @@ async def get_public_media_thumbnail(
 
 
 @router.get("/media/{media_id}/file")
-@limiter.limit("100/minute")
+@limiter.limit("30/minute")  # Stricter rate limit for file downloads
 async def get_public_media_file(
     request: Request,
     media_id: UUID,
@@ -654,7 +811,9 @@ async def get_public_media_file(
     Returns the actual file content for confirmed uploads from non-deleted projects.
     Used by the public transparency portal to display images.
 
-    Rate limited: 100 requests per minute per IP.
+    Rate limited: 30 requests per minute per IP.
+    Daily quota: 10 videos, 100 photos, 200MB total per IP.
+    Hourly spam limit: 300 requests per IP.
     """
     from ..api.media import s3_client
     from ..core.config import settings
@@ -674,6 +833,20 @@ async def get_public_media_file(
     # Check if upload is confirmed
     if not media.attributes or media.attributes.get('status') != 'confirmed':
         raise HTTPException(status_code=404, detail="Media not available")
+
+    # Check IP-based quota BEFORE fetching from S3
+    file_size = media.file_size or 0
+    allowed, reason = check_public_quota(
+        request=request,
+        media_type=media.media_type or "photo",
+        file_size=file_size
+    )
+
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=reason
+        )
 
     try:
         # Use cached image retrieval
