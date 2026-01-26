@@ -41,7 +41,8 @@ fun ProjectDetailScreen(
     onNavigateBack: () -> Unit,
     onReportProgress: (String) -> Unit,
     onAddPhoto: (String) -> Unit,
-    onRouteShoot: (String) -> Unit
+    onRouteShoot: (String) -> Unit,
+    onPlayTrack: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -438,7 +439,10 @@ fun ProjectDetailScreen(
                             if (uiState.gpsTracks.isNotEmpty()) {
                                 Spacer(modifier = Modifier.height(12.dp))
                                 uiState.gpsTracks.forEach { track ->
-                                    GpsTrackItem(track = track)
+                                    GpsTrackItem(
+                                        track = track,
+                                        onClick = { onPlayTrack(track.trackId) }
+                                    )
                                     if (track != uiState.gpsTracks.last()) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                     }
@@ -650,11 +654,16 @@ private fun PhotoPlaceholder() {
 }
 
 @Composable
-private fun GpsTrackItem(track: GpsTrackInfo) {
+private fun GpsTrackItem(
+    track: GpsTrackInfo,
+    onClick: () -> Unit
+) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = MaterialTheme.shapes.small,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier.padding(12.dp),

@@ -144,6 +144,10 @@ dependencies {
     // OSMDroid (OpenStreetMap)
     implementation("org.osmdroid:osmdroid-android:6.1.18")
 
+    // Media3/ExoPlayer (video playback)
+    implementation("androidx.media3:media3-exoplayer:1.2.0")
+    implementation("androidx.media3:media3-ui:1.2.0")
+
     // Accompanist (permissions)
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
 

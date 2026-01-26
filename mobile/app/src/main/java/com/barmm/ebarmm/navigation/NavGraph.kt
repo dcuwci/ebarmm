@@ -29,6 +29,7 @@ import com.barmm.ebarmm.presentation.media.CameraCaptureScreen
 import com.barmm.ebarmm.presentation.progress.ProgressReportScreen
 import com.barmm.ebarmm.presentation.project.ProjectDetailScreen
 import com.barmm.ebarmm.presentation.project.ProjectListScreen
+import com.barmm.ebarmm.presentation.routeshoot.RouteShootPlayerScreen
 import com.barmm.ebarmm.presentation.routeshoot.RouteShootScreen
 
 sealed class Screen(val route: String) {
@@ -59,6 +60,9 @@ sealed class Screen(val route: String) {
                 "routeshoot/$projectId"
             }
         }
+    }
+    object RouteShootPlayer : Screen("routeshoot_player/{trackId}") {
+        fun createRoute(trackId: String) = "routeshoot_player/$trackId"
     }
 }
 
@@ -180,6 +184,9 @@ fun NavGraph(
                     },
                     onRouteShoot = { id ->
                         navController.navigate(Screen.RouteShoot.createRoute(id, null))
+                    },
+                    onPlayTrack = { trackId ->
+                        navController.navigate(Screen.RouteShootPlayer.createRoute(trackId))
                     }
                 )
             }
@@ -231,6 +238,21 @@ fun NavGraph(
                 )
             ) {
                 RouteShootScreen(
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.RouteShootPlayer.route,
+                arguments = listOf(
+                    navArgument("trackId") { type = NavType.StringType }
+                )
+            ) {
+                val trackId = it.arguments?.getString("trackId") ?: return@composable
+                RouteShootPlayerScreen(
+                    trackId = trackId,
                     onNavigateBack = {
                         navController.popBackStack()
                     }
