@@ -42,12 +42,8 @@ docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --bui
 - APK location: `mobile/app/build/outputs/apk/staging/app-staging.apk`
 - Phone must be able to reach EC2 IP on port 8000
 
-### Database Schema Fixes (Staging)
-If you encounter errors about missing columns, apply these fixes on EC2:
-```bash
-# Missing metadata column on alerts table (needed for GIS feature creation outside BARMM)
-sudo -u postgres psql ebarmm -c "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS metadata JSONB;"
-```
+### Known Issues Fixed in Code
+- **alerts.metadata vs alert_metadata**: The database column is `alert_metadata`, not `metadata`. Fixed in `backend/app/api/gis.py`.
 
 ### Security
 - Never commit real secrets - only dev defaults (admin123, DevPassword123, minioadmin) are OK

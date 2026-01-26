@@ -93,7 +93,7 @@ async def create_gis_feature(
                 alert_type='geofence_violation',
                 severity='warning',
                 message='GIS feature is outside BARMM region boundary',
-                metadata={
+                alert_metadata={
                     'feature_type': feature.feature_type,
                     'created_by': str(current_user.user_id)
                 },

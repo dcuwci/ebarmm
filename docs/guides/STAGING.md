@@ -670,16 +670,9 @@ sudo certbot certonly --standalone -d staging.yourdomain.com
 
 ## Troubleshooting
 
-### Missing database columns
-
-If you see errors like `column "metadata" of relation "alerts" does not exist`, run these fixes:
-
-```bash
-# Missing metadata column on alerts table (needed for GIS feature creation)
-sudo -u postgres psql ebarmm -c "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS metadata JSONB;"
-```
-
 ### Backend can't connect to database
+
+> **Handled by setup script:** pg_hba.conf is configured automatically
 
 Check PostgreSQL is running:
 ```bash
@@ -694,6 +687,12 @@ sudo cat /etc/postgresql/15/main/pg_hba.conf | grep 172.17
 Should show:
 ```
 host    all    ebarmm_app    172.17.0.0/16    scram-sha-256
+```
+
+If missing, the setup script didn't complete properly. Re-run or add manually:
+```bash
+echo "host    all    ebarmm_app    172.17.0.0/16    scram-sha-256" | sudo tee -a /etc/postgresql/15/main/pg_hba.conf
+sudo systemctl restart postgresql
 ```
 
 ### Backend can't connect to S3
@@ -711,7 +710,9 @@ docker compose -f docker-compose.staging.yml exec backend env | grep S3
 
 ### S3 presigned URLs point to localhost
 
-If uploads fail because presigned URLs contain `localhost:9000` instead of AWS S3, add these to `.env.staging`:
+> **Handled by .env.staging.example:** S3_ENDPOINT and S3_USE_SSL are documented
+
+If uploads fail because presigned URLs contain `localhost:9000` instead of AWS S3, ensure these are in `.env.staging`:
 
 ```bash
 S3_ENDPOINT=https://s3.ap-northeast-1.amazonaws.com
