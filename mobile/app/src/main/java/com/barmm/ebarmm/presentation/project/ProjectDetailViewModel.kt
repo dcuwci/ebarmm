@@ -231,39 +231,56 @@ class ProjectDetailViewModel @Inject constructor(
 
     private suspend fun cacheGpsTrackFromServer(serverTrack: GpsTrackResponse) {
         try {
+            Timber.d("cacheGpsTrack: Checking for existing track with serverId=${serverTrack.trackId}")
             // Check if we already have this track locally (by serverId)
             val existingTrack = gpsTrackDao.getTracksByProjectOnce(serverTrack.projectId)
                 .find { it.serverId == serverTrack.trackId }
 
-            if (existingTrack == null) {
-                // Create new local entity from server data
-                val waypointsJson = gson.toJson(serverTrack.waypoints)
-                val entity = GpsTrackEntity(
-                    trackId = java.util.UUID.randomUUID().toString(),
-                    projectId = serverTrack.projectId,
-                    mediaLocalId = "", // Server tracks don't have local media
-                    trackName = serverTrack.trackName,
-                    waypointsJson = waypointsJson,
-                    waypointCount = serverTrack.waypointCount,
-                    totalDistanceMeters = serverTrack.totalDistanceMeters,
-                    startTime = parseIsoDate(serverTrack.startTime),
-                    endTime = serverTrack.endTime?.let { parseIsoDate(it) },
-                    syncStatus = SyncStatus.SYNCED,
-                    serverId = serverTrack.trackId,
-                    syncedAt = System.currentTimeMillis()
-                )
-                gpsTrackDao.upsertTrack(entity)
+            if (existingTrack != null) {
+                Timber.d("cacheGpsTrack: Track already exists locally, skipping")
+                return
             }
+
+            Timber.d("cacheGpsTrack: Creating new local entity")
+            // Create new local entity from server data
+            val waypointsJson = gson.toJson(serverTrack.waypoints)
+            val entity = GpsTrackEntity(
+                trackId = java.util.UUID.randomUUID().toString(),
+                projectId = serverTrack.projectId,
+                mediaLocalId = "", // Server tracks don't have local media
+                trackName = serverTrack.trackName,
+                waypointsJson = waypointsJson,
+                waypointCount = serverTrack.waypointCount,
+                totalDistanceMeters = serverTrack.totalDistanceMeters,
+                startTime = parseIsoDate(serverTrack.startTime),
+                endTime = serverTrack.endTime?.let { parseIsoDate(it) },
+                syncStatus = SyncStatus.SYNCED,
+                serverId = serverTrack.trackId,
+                syncedAt = System.currentTimeMillis()
+            )
+            Timber.d("cacheGpsTrack: Inserting entity with trackId=${entity.trackId}, projectId=${entity.projectId}")
+            gpsTrackDao.upsertTrack(entity)
+            Timber.d("cacheGpsTrack: Insert successful")
         } catch (e: Exception) {
-            // Caching failed, not critical
+            Timber.e(e, "cacheGpsTrack: Failed to cache track ${serverTrack.trackId}")
         }
     }
 
     private fun parseIsoDate(isoDate: String): Long {
         return try {
+            // Try parsing with timezone first
             Instant.parse(isoDate).toEpochMilli()
         } catch (e: Exception) {
-            System.currentTimeMillis()
+            try {
+                // Try parsing as LocalDateTime and assume UTC
+                java.time.LocalDateTime.parse(isoDate)
+                    .atZone(java.time.ZoneOffset.UTC)
+                    .toInstant()
+                    .toEpochMilli()
+            } catch (e2: Exception) {
+                Timber.e(e2, "parseIsoDate: Failed to parse date: $isoDate")
+                System.currentTimeMillis()
+            }
         }
     }
 
