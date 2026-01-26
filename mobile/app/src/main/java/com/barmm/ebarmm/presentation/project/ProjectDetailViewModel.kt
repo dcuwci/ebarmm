@@ -8,6 +8,8 @@ import com.barmm.ebarmm.data.local.database.dao.ProjectDao
 import com.barmm.ebarmm.data.local.database.entity.ProgressEntity
 import com.barmm.ebarmm.data.local.database.entity.ProjectEntity
 import com.barmm.ebarmm.data.remote.api.MediaApi
+import com.barmm.ebarmm.data.remote.api.ProjectApi
+import com.barmm.ebarmm.data.remote.dto.ProjectResponse
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Instant
 import javax.inject.Inject
 
 data class ProjectPhoto(
@@ -42,7 +45,8 @@ class ProjectDetailViewModel @Inject constructor(
     private val projectDao: ProjectDao,
     private val progressDao: ProgressDao,
     private val mediaDao: MediaDao,
-    private val mediaApi: MediaApi
+    private val mediaApi: MediaApi,
+    private val projectApi: ProjectApi
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProjectDetailUiState())
@@ -53,7 +57,13 @@ class ProjectDetailViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             try {
-                val project = projectDao.getProject(projectId)
+                // Try local cache first
+                var project = projectDao.getProject(projectId)
+
+                // If not found locally, fetch from server
+                if (project == null) {
+                    project = fetchProjectFromServer(projectId)
+                }
 
                 if (project != null) {
                     // Load recent progress
@@ -89,6 +99,50 @@ class ProjectDetailViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    private suspend fun fetchProjectFromServer(projectId: String): ProjectEntity? {
+        return try {
+            val response = projectApi.getProject(projectId)
+            if (response.isSuccessful && response.body() != null) {
+                val projectResponse = response.body()!!
+                val entity = mapToEntity(projectResponse)
+                // Cache locally
+                projectDao.insertProject(entity)
+                entity
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            // Network error, return null
+            null
+        }
+    }
+
+    private fun mapToEntity(response: ProjectResponse): ProjectEntity {
+        val now = System.currentTimeMillis()
+        val createdAtMillis = try {
+            Instant.parse(response.createdAt).toEpochMilli()
+        } catch (e: Exception) {
+            now
+        }
+
+        return ProjectEntity(
+            projectId = response.projectId,
+            name = response.projectTitle,
+            location = response.location,
+            fundSource = response.fundSource,
+            modeOfImplementation = response.modeOfImplementation,
+            projectCost = response.projectCost,
+            projectScale = response.projectScale,
+            fundYear = response.fundYear,
+            status = response.status,
+            deoId = response.deoId,
+            deoName = response.deoName,
+            currentProgress = response.currentProgress,
+            createdAt = createdAtMillis,
+            syncedAt = now
+        )
     }
 
     private suspend fun loadProjectPhotos(projectId: String): List<ProjectPhoto> {
