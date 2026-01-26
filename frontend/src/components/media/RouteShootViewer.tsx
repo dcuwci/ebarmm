@@ -82,15 +82,17 @@ function TrackPlayer({ track, onClose }: TrackPlayerProps) {
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null)
   const [videoLoading, setVideoLoading] = useState(false)
   const [videoError, setVideoError] = useState<string | null>(null)
+  const [downloadProgress, setDownloadProgress] = useState(0)
   const token = useAuthStore((state) => state.token)
 
-  // Fetch video with auth token and create blob URL
+  // Fetch video with auth token and create blob URL (with progress tracking)
   useEffect(() => {
     if (!track.video_url || videoBlobUrl) return
 
     const fetchVideo = async () => {
       setVideoLoading(true)
       setVideoError(null)
+      setDownloadProgress(0)
 
       try {
         const response = await fetch(track.video_url!, {
@@ -107,9 +109,38 @@ function TrackPlayer({ track, onClose }: TrackPlayerProps) {
           throw new Error(`Failed to load video: ${response.status}`)
         }
 
-        const blob = await response.blob()
-        const blobUrl = URL.createObjectURL(blob)
-        setVideoBlobUrl(blobUrl)
+        // Get content length for progress calculation
+        const contentLength = response.headers.get('Content-Length')
+        const totalBytes = contentLength ? parseInt(contentLength, 10) : 0
+
+        if (totalBytes > 0 && response.body) {
+          // Stream the response with progress tracking
+          const reader = response.body.getReader()
+          const chunks: BlobPart[] = []
+          let receivedBytes = 0
+
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            chunks.push(value.buffer as ArrayBuffer)
+            receivedBytes += value.length
+
+            // Update progress (throttle to every 1%)
+            const progress = Math.round((receivedBytes / totalBytes) * 100)
+            setDownloadProgress(progress)
+          }
+
+          // Combine chunks into blob
+          const blob = new Blob(chunks)
+          const blobUrl = URL.createObjectURL(blob)
+          setVideoBlobUrl(blobUrl)
+        } else {
+          // Fallback: no content-length, can't show progress
+          const blob = await response.blob()
+          const blobUrl = URL.createObjectURL(blob)
+          setVideoBlobUrl(blobUrl)
+        }
       } catch (err) {
         setVideoError(err instanceof Error ? err.message : 'Failed to load video')
       } finally {
@@ -237,11 +268,38 @@ function TrackPlayer({ track, onClose }: TrackPlayerProps) {
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'grey.900' }}>
               {track.video_url ? (
                 <>
-                  {/* Loading state */}
+                  {/* Loading state with progress */}
                   {videoLoading && (
                     <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 2 }}>
-                      <CircularProgress sx={{ color: 'white' }} />
-                      <Typography sx={{ color: 'grey.400' }}>Loading video...</Typography>
+                      <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+                        <CircularProgress
+                          variant={downloadProgress > 0 ? 'determinate' : 'indeterminate'}
+                          value={downloadProgress}
+                          size={60}
+                          sx={{ color: 'white' }}
+                        />
+                        {downloadProgress > 0 && (
+                          <Box
+                            sx={{
+                              top: 0,
+                              left: 0,
+                              bottom: 0,
+                              right: 0,
+                              position: 'absolute',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Typography variant="caption" sx={{ color: 'white', fontWeight: 'bold' }}>
+                              {downloadProgress}%
+                            </Typography>
+                          </Box>
+                        )}
+                      </Box>
+                      <Typography sx={{ color: 'grey.400' }}>
+                        {downloadProgress > 0 ? 'Downloading video...' : 'Loading video...'}
+                      </Typography>
                     </Box>
                   )}
                   {/* Error state */}

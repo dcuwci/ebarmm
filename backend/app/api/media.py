@@ -809,7 +809,8 @@ async def get_media_file(
             media_type=content_type,
             headers={
                 "Content-Disposition": f"inline; filename=\"{media.attributes.get('filename', 'file') if media.attributes else 'file'}\"",
-                "Cache-Control": "public, max-age=86400"  # Cache for 24 hours
+                "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
+                "Content-Length": str(len(image_data))  # Required for download progress
             }
         )
     except HTTPException:

@@ -241,16 +241,21 @@ class RouteShootPlayerViewModel @Inject constructor(
                         val buffer = ByteArray(8192)
                         var bytesRead: Int
                         var totalBytesRead = 0L
+                        var lastReportedProgress = 0
 
                         while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                             outputStream.write(buffer, 0, bytesRead)
                             totalBytesRead += bytesRead
 
-                            // Update progress
+                            // Update progress (throttle to every 1% to reduce UI updates)
                             if (contentLength > 0) {
-                                val progress = totalBytesRead.toFloat() / contentLength
-                                withContext(Dispatchers.Main) {
-                                    _uiState.update { it.copy(downloadProgress = progress) }
+                                val progressPercent = ((totalBytesRead.toFloat() / contentLength) * 100).toInt()
+                                if (progressPercent > lastReportedProgress) {
+                                    lastReportedProgress = progressPercent
+                                    val progress = totalBytesRead.toFloat() / contentLength
+                                    withContext(Dispatchers.Main) {
+                                        _uiState.update { it.copy(downloadProgress = progress) }
+                                    }
                                 }
                             }
                         }
