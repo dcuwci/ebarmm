@@ -58,3 +58,6 @@ coverage/
 
 # Project references (PDFs, local docs)
 references/
+
+# Claude Code temp files
+tmpclaude-*
