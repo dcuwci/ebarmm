@@ -61,6 +61,7 @@ import coil.request.ImageRequest
 import com.barmm.ebarmm.BuildConfig
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -389,220 +390,199 @@ private fun OsmMapView(
 ) {
     val context = LocalContext.current
     var hasInitialZoom by remember { mutableStateOf(false) }
-    // Track previous state to avoid unnecessary overlay rebuilds
-    var lastGeometriesSize by remember { mutableStateOf(0) }
-    var lastPhotoMarkersSize by remember { mutableStateOf(0) }
+    var lastSelectedProjectId by remember { mutableStateOf<String?>(null) }
 
     val mapView = remember {
         MapView(context).apply {
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
             controller.setZoom(8.0)
-            // Center on BARMM region (default, will be overridden by zoom-to-fit)
             controller.setCenter(GeoPoint(6.9214, 124.2452))
         }
     }
 
-    AndroidView(
-        factory = { mapView },
-        modifier = Modifier.fillMaxSize(),
-        update = { map ->
-            // Only rebuild overlays if data actually changed
-            val geometriesChanged = geometries.size != lastGeometriesSize
-            val photoMarkersChanged = photoMarkers.size != lastPhotoMarkersSize
+    // Build overlays once when geometries/photoMarkers change
+    DisposableEffect(geometries, photoMarkers) {
+        val map = mapView
+        map.overlays.clear()
 
-            if (geometriesChanged || photoMarkersChanged || !hasInitialZoom) {
-                lastGeometriesSize = geometries.size
-                lastPhotoMarkersSize = photoMarkers.size
+        geometries.forEach { geometry ->
+            val color = getStatusColor(geometry.status)
+            val androidColor = color.toArgb()
 
-                map.overlays.clear()
+            when (geometry) {
+                is ProjectGeometry.Point -> {
+                    val marker = Marker(map).apply {
+                        position = geometry.location
+                        title = geometry.title
+                        snippet = "${geometry.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", geometry.progress)}"
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                        icon = createMarkerDrawable(androidColor)
+                        setOnMarkerClickListener { _, _ ->
+                            onGeometryClick(geometry)
+                            true
+                        }
+                    }
+                    map.overlays.add(marker)
+                }
 
-            geometries.forEach { geometry ->
-                val color = getStatusColor(geometry.status)
-                val androidColor = color.toArgb()
+                is ProjectGeometry.Line -> {
+                    val polyline = Polyline().apply {
+                        setPoints(geometry.points)
+                        outlinePaint.color = androidColor
+                        outlinePaint.strokeWidth = 8f
+                        title = geometry.title
+                        setOnClickListener { _, _, _ ->
+                            onGeometryClick(geometry)
+                            true
+                        }
+                    }
+                    map.overlays.add(polyline)
 
-                when (geometry) {
-                    is ProjectGeometry.Point -> {
-                        val marker = Marker(map).apply {
-                            position = geometry.location
+                    if (geometry.points.isNotEmpty()) {
+                        val centerMarker = Marker(map).apply {
+                            position = geometry.points[geometry.points.size / 2]
                             title = geometry.title
-                            snippet = "${geometry.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", geometry.progress)}"
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            icon = createMarkerDrawable(androidColor)
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                            icon = createSmallMarkerDrawable(androidColor)
                             setOnMarkerClickListener { _, _ ->
                                 onGeometryClick(geometry)
                                 true
                             }
                         }
-                        map.overlays.add(marker)
+                        map.overlays.add(centerMarker)
                     }
+                }
 
-                    is ProjectGeometry.Line -> {
+                is ProjectGeometry.MultiLine -> {
+                    geometry.segments.forEach { segment ->
                         val polyline = Polyline().apply {
-                            setPoints(geometry.points)
+                            setPoints(segment)
                             outlinePaint.color = androidColor
                             outlinePaint.strokeWidth = 8f
                             title = geometry.title
-                            snippet = "${geometry.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", geometry.progress)}"
                             setOnClickListener { _, _, _ ->
                                 onGeometryClick(geometry)
                                 true
                             }
                         }
                         map.overlays.add(polyline)
-
-                        // Add a marker at the center for easier selection
-                        if (geometry.points.isNotEmpty()) {
-                            val centerIndex = geometry.points.size / 2
-                            val centerPoint = geometry.points[centerIndex]
-                            val centerMarker = Marker(map).apply {
-                                position = centerPoint
-                                title = geometry.title
-                                snippet = "${geometry.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", geometry.progress)}"
-                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                                icon = createSmallMarkerDrawable(androidColor)
-                                setOnMarkerClickListener { _, _ ->
-                                    onGeometryClick(geometry)
-                                    true
-                                }
-                            }
-                            map.overlays.add(centerMarker)
-                        }
                     }
 
-                    is ProjectGeometry.MultiLine -> {
-                        // Render each segment as a separate polyline (fixes connected features bug)
-                        geometry.segments.forEach { segment ->
-                            val polyline = Polyline().apply {
-                                setPoints(segment)
-                                outlinePaint.color = androidColor
-                                outlinePaint.strokeWidth = 8f
-                                title = geometry.title
-                                snippet = "${geometry.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", geometry.progress)}"
-                                setOnClickListener { _, _, _ ->
-                                    onGeometryClick(geometry)
-                                    true
-                                }
-                            }
-                            map.overlays.add(polyline)
-                        }
-
-                        // Add a marker at the center of the first segment for selection
-                        if (geometry.segments.isNotEmpty() && geometry.segments[0].isNotEmpty()) {
-                            val firstSegment = geometry.segments[0]
-                            val centerIndex = firstSegment.size / 2
-                            val centerPoint = firstSegment[centerIndex]
-                            val centerMarker = Marker(map).apply {
-                                position = centerPoint
-                                title = geometry.title
-                                snippet = "${geometry.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", geometry.progress)}"
-                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                                icon = createSmallMarkerDrawable(androidColor)
-                                setOnMarkerClickListener { _, _ ->
-                                    onGeometryClick(geometry)
-                                    true
-                                }
-                            }
-                            map.overlays.add(centerMarker)
-                        }
-                    }
-
-                    is ProjectGeometry.Polygon -> {
-                        val polygon = Polygon().apply {
-                            points = geometry.points
-                            fillPaint.color = AndroidColor.argb(50, AndroidColor.red(androidColor), AndroidColor.green(androidColor), AndroidColor.blue(androidColor))
-                            outlinePaint.color = androidColor
-                            outlinePaint.strokeWidth = 4f
+                    if (geometry.segments.isNotEmpty() && geometry.segments[0].isNotEmpty()) {
+                        val firstSegment = geometry.segments[0]
+                        val centerMarker = Marker(map).apply {
+                            position = firstSegment[firstSegment.size / 2]
                             title = geometry.title
-                            snippet = "${geometry.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", geometry.progress)}"
-                            setOnClickListener { _, _, _ ->
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                            icon = createSmallMarkerDrawable(androidColor)
+                            setOnMarkerClickListener { _, _ ->
                                 onGeometryClick(geometry)
                                 true
                             }
                         }
-                        map.overlays.add(polygon)
+                        map.overlays.add(centerMarker)
+                    }
+                }
 
-                        // Add a marker at centroid for easier selection
-                        if (geometry.points.isNotEmpty()) {
-                            val centroid = calculateCentroid(geometry.points)
-                            val centerMarker = Marker(map).apply {
-                                position = centroid
-                                title = geometry.title
-                                snippet = "${geometry.status.replaceFirstChar { it.uppercase() }} - ${String.format("%.0f%%", geometry.progress)}"
-                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                                icon = createSmallMarkerDrawable(androidColor)
-                                setOnMarkerClickListener { _, _ ->
-                                    onGeometryClick(geometry)
-                                    true
-                                }
+                is ProjectGeometry.Polygon -> {
+                    val polygon = Polygon().apply {
+                        points = geometry.points
+                        fillPaint.color = AndroidColor.argb(50, AndroidColor.red(androidColor), AndroidColor.green(androidColor), AndroidColor.blue(androidColor))
+                        outlinePaint.color = androidColor
+                        outlinePaint.strokeWidth = 4f
+                        title = geometry.title
+                        setOnClickListener { _, _, _ ->
+                            onGeometryClick(geometry)
+                            true
+                        }
+                    }
+                    map.overlays.add(polygon)
+
+                    if (geometry.points.isNotEmpty()) {
+                        val centroid = calculateCentroid(geometry.points)
+                        val centerMarker = Marker(map).apply {
+                            position = centroid
+                            title = geometry.title
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                            icon = createSmallMarkerDrawable(androidColor)
+                            setOnMarkerClickListener { _, _ ->
+                                onGeometryClick(geometry)
+                                true
                             }
-                            map.overlays.add(centerMarker)
                         }
-                    }
-                }
-            }
-
-            // Add photo markers
-            photoMarkers.forEach { photo ->
-                val photoMarker = Marker(map).apply {
-                    position = GeoPoint(photo.latitude, photo.longitude)
-                    title = photo.projectTitle
-                    snippet = "Photo: ${photo.fileName}"
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    icon = createPhotoMarkerDrawable(context)
-                    setOnMarkerClickListener { _, _ ->
-                        onPhotoClick(photo)
-                        true
-                    }
-                }
-                map.overlays.add(photoMarker)
-            }
-
-                // Zoom to fit all geometries on initial load
-                if (!hasInitialZoom && geometries.isNotEmpty()) {
-                    val allPoints = mutableListOf<GeoPoint>()
-
-                    geometries.forEach { geometry ->
-                        when (geometry) {
-                            is ProjectGeometry.Point -> allPoints.add(geometry.location)
-                            is ProjectGeometry.Line -> allPoints.addAll(geometry.points)
-                            is ProjectGeometry.MultiLine -> geometry.segments.forEach { allPoints.addAll(it) }
-                            is ProjectGeometry.Polygon -> allPoints.addAll(geometry.points)
-                        }
-                    }
-
-                    if (allPoints.isNotEmpty()) {
-                        val boundingBox = org.osmdroid.util.BoundingBox.fromGeoPoints(allPoints)
-                        // Use built-in padding (50 pixels on each side)
-                        map.zoomToBoundingBox(boundingBox, false, 50)
-                        // Ensure minimum zoom level of 6 to prevent world map duplication
-                        if (map.zoomLevelDouble < 6.0) {
-                            map.controller.setZoom(6.0)
-                        }
-                        hasInitialZoom = true
-                    }
-                }
-
-                map.invalidate()
-            } // end if (geometriesChanged || photoMarkersChanged)
-
-            // Zoom to selected project if any (outside overlay rebuild block)
-            selectedProject?.let { project ->
-                geometries.find { it.projectId == project.projectId }?.let { geometry ->
-                    val targetPoint = when (geometry) {
-                        is ProjectGeometry.Point -> geometry.location
-                        is ProjectGeometry.Line -> if (geometry.points.isNotEmpty()) geometry.points[geometry.points.size / 2] else null
-                        is ProjectGeometry.MultiLine -> if (geometry.segments.isNotEmpty() && geometry.segments[0].isNotEmpty()) geometry.segments[0][geometry.segments[0].size / 2] else null
-                        is ProjectGeometry.Polygon -> if (geometry.points.isNotEmpty()) calculateCentroid(geometry.points) else null
-                    }
-                    targetPoint?.let {
-                        map.controller.animateTo(it)
-                        map.controller.setZoom(14.0)
-                        map.invalidate()
+                        map.overlays.add(centerMarker)
                     }
                 }
             }
         }
+
+        // Add photo markers
+        photoMarkers.forEach { photo ->
+            val photoMarker = Marker(map).apply {
+                position = GeoPoint(photo.latitude, photo.longitude)
+                title = photo.projectTitle
+                snippet = "Photo: ${photo.fileName}"
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                icon = createPhotoMarkerDrawable(context)
+                setOnMarkerClickListener { _, _ ->
+                    onPhotoClick(photo)
+                    true
+                }
+            }
+            map.overlays.add(photoMarker)
+        }
+
+        // Zoom to fit all geometries on initial load
+        if (!hasInitialZoom && geometries.isNotEmpty()) {
+            val allPoints = mutableListOf<GeoPoint>()
+            geometries.forEach { geometry ->
+                when (geometry) {
+                    is ProjectGeometry.Point -> allPoints.add(geometry.location)
+                    is ProjectGeometry.Line -> allPoints.addAll(geometry.points)
+                    is ProjectGeometry.MultiLine -> geometry.segments.forEach { allPoints.addAll(it) }
+                    is ProjectGeometry.Polygon -> allPoints.addAll(geometry.points)
+                }
+            }
+            if (allPoints.isNotEmpty()) {
+                val boundingBox = org.osmdroid.util.BoundingBox.fromGeoPoints(allPoints)
+                map.zoomToBoundingBox(boundingBox, false, 50)
+                if (map.zoomLevelDouble < 6.0) {
+                    map.controller.setZoom(6.0)
+                }
+                hasInitialZoom = true
+            }
+        }
+
+        map.invalidate()
+
+        onDispose { }
+    }
+
+    // Handle selected project zoom separately
+    LaunchedEffect(selectedProject?.projectId) {
+        val projectId = selectedProject?.projectId
+        if (projectId != null && projectId != lastSelectedProjectId) {
+            lastSelectedProjectId = projectId
+            geometries.find { it.projectId == projectId }?.let { geometry ->
+                val targetPoint = when (geometry) {
+                    is ProjectGeometry.Point -> geometry.location
+                    is ProjectGeometry.Line -> if (geometry.points.isNotEmpty()) geometry.points[geometry.points.size / 2] else null
+                    is ProjectGeometry.MultiLine -> if (geometry.segments.isNotEmpty() && geometry.segments[0].isNotEmpty()) geometry.segments[0][geometry.segments[0].size / 2] else null
+                    is ProjectGeometry.Polygon -> if (geometry.points.isNotEmpty()) calculateCentroid(geometry.points) else null
+                }
+                targetPoint?.let {
+                    mapView.controller.animateTo(it)
+                    mapView.controller.setZoom(14.0)
+                    mapView.invalidate()
+                }
+            }
+        }
+    }
+
+    AndroidView(
+        factory = { mapView },
+        modifier = Modifier.fillMaxSize()
     )
 
     DisposableEffect(Unit) {
