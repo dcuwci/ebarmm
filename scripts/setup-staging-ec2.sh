@@ -118,9 +118,11 @@ fi
 PG_HBA="/etc/postgresql/15/main/pg_hba.conf"
 sudo cp $PG_HBA ${PG_HBA}.backup
 
-# Add Docker network access
+# Add Docker network access (both default bridge and compose networks)
 echo "# Docker network access" | sudo tee -a $PG_HBA
 echo "host    all    ebarmm_app    172.17.0.0/16    scram-sha-256" | sudo tee -a $PG_HBA
+echo "host    all    ebarmm_app    172.18.0.0/16    scram-sha-256" | sudo tee -a $PG_HBA
+echo "host    all    ebarmm_app    172.19.0.0/16    scram-sha-256" | sudo tee -a $PG_HBA
 
 # Configure postgresql.conf to listen on Docker interface
 PG_CONF="/etc/postgresql/15/main/postgresql.conf"
@@ -263,7 +265,10 @@ echo "   sudo -u postgres psql ebarmm < database/02_create_triggers.sql"
 echo "   sudo -u postgres psql ebarmm < database/03_seed_data.sql"
 echo "   sudo -u postgres psql ebarmm < database/04_user_management.sql"
 echo "   sudo -u postgres psql ebarmm < database/05_demo_data.sql  # Optional"
-echo "5. Start services:"
+echo "5. Grant permissions to app user (REQUIRED after running SQL scripts):"
+echo "   sudo -u postgres psql ebarmm -c \"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ebarmm_app;\""
+echo "   sudo -u postgres psql ebarmm -c \"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ebarmm_app;\""
+echo "6. Start services:"
 echo "   cd docker"
 echo "   docker compose -f docker-compose.staging.yml --env-file .env.staging up -d"
 echo ""

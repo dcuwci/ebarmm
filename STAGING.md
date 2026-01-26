@@ -482,6 +482,15 @@ This includes:
 - 12 GIS road features with real BARMM coordinates
 - Sample progress log entries
 
+### 5.2 Grant Permissions (Required)
+
+After running the SQL scripts, grant permissions to the app user:
+
+```bash
+sudo -u postgres psql ebarmm -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ebarmm_app;"
+sudo -u postgres psql ebarmm -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ebarmm_app;"
+```
+
 ---
 
 ## Step 6: Configure Environment
