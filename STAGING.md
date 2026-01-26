@@ -512,10 +512,13 @@ DB_PASSWORD=<password from setup script>
 DB_NAME=ebarmm
 
 # AWS S3 (from IAM user creation)
-AWS_REGION=ap-southeast-1
+AWS_REGION=ap-northeast-1
 S3_ACCESS_KEY=<your IAM access key>
 S3_SECRET_KEY=<your IAM secret key>
 S3_BUCKET=ebarmm-staging-media
+# IMPORTANT: Required for AWS S3 - without these, presigned URLs point to localhost
+S3_ENDPOINT=https://s3.ap-northeast-1.amazonaws.com
+S3_USE_SSL=true
 
 # SECURITY (from setup script output)
 JWT_SECRET_KEY=<JWT secret from setup script>
@@ -532,7 +535,9 @@ CORS_ORIGINS=["http://YOUR_ELASTIC_IP"]
 | `S3_ACCESS_KEY` | IAM user → Security credentials |
 | `S3_SECRET_KEY` | IAM user → Security credentials |
 | `S3_BUCKET` | S3 bucket name you created |
-| `AWS_REGION` | Your EC2 region (e.g., `ap-southeast-1`) |
+| `AWS_REGION` | Your EC2 region (e.g., `ap-northeast-1`) |
+| `S3_ENDPOINT` | `https://s3.<region>.amazonaws.com` (required for AWS S3) |
+| `S3_USE_SSL` | `true` (required for AWS S3) |
 | `JWT_SECRET_KEY` | Setup script output |
 | `CORS_ORIGINS` | Your Elastic IP |
 
@@ -665,6 +670,15 @@ sudo certbot certonly --standalone -d staging.yourdomain.com
 
 ## Troubleshooting
 
+### Missing database columns
+
+If you see errors like `column "metadata" of relation "alerts" does not exist`, run these fixes:
+
+```bash
+# Missing metadata column on alerts table (needed for GIS feature creation)
+sudo -u postgres psql ebarmm -c "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS metadata JSONB;"
+```
+
 ### Backend can't connect to database
 
 Check PostgreSQL is running:
@@ -687,12 +701,26 @@ host    all    ebarmm_app    172.17.0.0/16    scram-sha-256
 Verify credentials:
 ```bash
 # Test S3 access
-aws s3 ls s3://ebarmm-staging-media/ --region ap-southeast-1
+aws s3 ls s3://ebarmm-staging-media/ --region ap-northeast-1
 ```
 
 Check environment variables:
 ```bash
 docker compose -f docker-compose.staging.yml exec backend env | grep S3
+```
+
+### S3 presigned URLs point to localhost
+
+If uploads fail because presigned URLs contain `localhost:9000` instead of AWS S3, add these to `.env.staging`:
+
+```bash
+S3_ENDPOINT=https://s3.ap-northeast-1.amazonaws.com
+S3_USE_SSL=true
+```
+
+Then restart the backend:
+```bash
+docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build backend
 ```
 
 ### Services won't start

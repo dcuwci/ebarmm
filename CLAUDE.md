@@ -7,6 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Important Reminders (Read First!)
 
+### Documentation Updates
+- **When fixing staging/deployment issues**, always update `STAGING.md`, `CLAUDE.md`, and `.env.staging.example`
+- This ensures fixes are not lost and can be replicated on fresh installs
+
 ### Development Workflow Preference
 - **Develop against staging server** instead of running local backend
 - Mobile: Use Android Studio with **staging** build variant (Build → Select Build Variant → staging)
@@ -37,6 +41,13 @@ docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --bui
 - Build staging APK: `./gradlew.bat clean assembleStaging` (Windows) or `./gradlew clean assembleStaging` (Mac/Linux)
 - APK location: `mobile/app/build/outputs/apk/staging/app-staging.apk`
 - Phone must be able to reach EC2 IP on port 8000
+
+### Database Schema Fixes (Staging)
+If you encounter errors about missing columns, apply these fixes on EC2:
+```bash
+# Missing metadata column on alerts table (needed for GIS feature creation outside BARMM)
+sudo -u postgres psql ebarmm -c "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS metadata JSONB;"
+```
 
 ### Security
 - Never commit real secrets - only dev defaults (admin123, DevPassword123, minioadmin) are OK
