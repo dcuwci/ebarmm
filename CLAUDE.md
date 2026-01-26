@@ -57,11 +57,14 @@ docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --bui
 - **Map max zoom**: Web maps use `maxZoom={22}` on MapContainer and `maxNativeZoom={19}` on TileLayer to allow overzooming beyond tile provider limits.
 - **GPS tracks from server need nullable mediaLocalId**: Server-synced GPS tracks don't have local video files, so `mediaLocalId` must be nullable. Fixed in database version 4.
 
-### Video Download Feature (Mobile)
-- GPS tracks from server can have videos downloaded on-demand
-- Videos are cached locally after first download (no re-download needed)
-- Rate limiting: 60 video downloads per hour per IP to control AWS costs
-- Requires `API_BASE_URL` in `.env.staging` (e.g., `http://YOUR_EC2_IP:8000`)
+### Media Download & Quota System
+- **Mobile**: GPS track videos can be downloaded on-demand and cached locally
+- **Web**: RouteShoot viewer fetches video with auth token and creates blob URL (HTML video elements don't send auth headers)
+- **Quota limits (per user per day)**: 20 videos, 200 photos, 500MB total
+- **Public endpoint limits (per IP per day)**: 10 videos, 100 photos, 200MB total, 300 requests/hour
+- **Rate limiting**: Additional 60 requests/hour via slowapi on `/media/{id}/file`
+- Requires `API_BASE_URL` in `.env.staging` and docker-compose.staging.yml (e.g., `http://YOUR_EC2_IP:8000`)
+- Check quota status: `GET /api/v1/media/quota/status` (authenticated) or `GET /api/v1/public/quota/status`
 
 ### Security
 - Never commit real secrets - only dev defaults (admin123, DevPassword123, minioadmin) are OK
