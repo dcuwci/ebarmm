@@ -65,15 +65,31 @@ app/src/main/java/com/barmm/ebarmm/
 
 ### 1. Configure Backend URL
 
-Edit `mobile/app/build.gradle.kts`:
+Edit `mobile/app/build.gradle.kts`. There are three build variants:
 
+**Debug** (for emulator):
 ```kotlin
-buildConfigField("String", "API_BASE_URL", "\"http://YOUR_BACKEND_URL:8000\"")
+getByName("debug") {
+    buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8000\"")
+}
 ```
 
-For local development:
-- Use `http://10.0.2.2:8000` for Android Emulator
-- Use `http://YOUR_LOCAL_IP:8000` for physical devices
+**Staging** (for testing on physical device with EC2):
+```kotlin
+create("staging") {
+    // IMPORTANT: initWith must come BEFORE buildConfigField or URL gets overwritten
+    initWith(getByName("debug"))
+    buildConfigField("String", "API_BASE_URL", "\"http://YOUR_EC2_IP:8000\"")
+    // ...
+}
+```
+
+**Release** (for production):
+```kotlin
+release {
+    buildConfigField("String", "API_BASE_URL", "\"https://api.yourdomain.com\"")
+}
+```
 
 ### 2. Build the Project
 

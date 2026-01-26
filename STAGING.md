@@ -743,8 +743,12 @@ Edit `mobile/app/build.gradle.kts` and update the staging server IP:
 
 ```kotlin
 create("staging") {
+    // IMPORTANT: initWith must come BEFORE buildConfigField or URL gets overwritten
+    initWith(getByName("debug"))
     buildConfigField("String", "API_BASE_URL", "\"http://YOUR_ELASTIC_IP:8000\"")
-    // ...
+    isDebuggable = true
+    applicationIdSuffix = ".staging"
+    versionNameSuffix = "-staging"
 }
 ```
 

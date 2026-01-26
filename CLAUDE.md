@@ -25,6 +25,12 @@ docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --bui
 docker compose -f docker-compose.staging.yml --env-file .env.staging up -d --build           # Both
 ```
 
+### Mobile Staging Build
+- In `build.gradle.kts`, **`initWith(getByName("debug"))` must come BEFORE `buildConfigField`** or the URL gets overwritten
+- Build staging APK: `./gradlew.bat clean assembleStaging` (Windows) or `./gradlew clean assembleStaging` (Mac/Linux)
+- APK location: `mobile/app/build/outputs/apk/staging/app-staging.apk`
+- Phone must be able to reach EC2 IP on port 8000
+
 ### Security
 - Never commit real secrets - only dev defaults (admin123, DevPassword123, minioadmin) are OK
 - Real staging credentials go in `.env.staging` on EC2 only (gitignored)
