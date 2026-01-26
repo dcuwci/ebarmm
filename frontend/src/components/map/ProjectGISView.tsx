@@ -230,11 +230,14 @@ export default function ProjectGISView({ projectId, isPublic = false }: ProjectG
           <MapContainer
             center={[7.0, 124.0]} // Default center (BARMM area)
             zoom={9}
+            maxZoom={22}
             style={{ height: '100%', width: '100%' }}
           >
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              maxZoom={19}
+              maxNativeZoom={19}
             />
             <GeoJSON
               key={features.features.map(f => f.id).join('-')}

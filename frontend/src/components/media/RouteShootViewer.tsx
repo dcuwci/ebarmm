@@ -288,10 +288,13 @@ function TrackPlayer({ track, onClose }: TrackPlayerProps) {
                   bounds={bounds || undefined}
                   style={{ height: '100%', width: '100%' }}
                   scrollWheelZoom
+                  maxZoom={22}
                 >
                   <TileLayer
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    maxZoom={19}
+                    maxNativeZoom={19}
                   />
 
                   {/* Track polyline */}

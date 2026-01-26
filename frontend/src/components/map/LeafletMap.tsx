@@ -269,11 +269,12 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
       <MapContainer
         center={DEFAULT_CENTER}
         zoom={DEFAULT_ZOOM}
+        maxZoom={22}
         style={{ height: '100%', width: '100%' }}
         zoomControl={false}
       >
         <ZoomControl position="bottomright" />
-        <TileLayer url={tileLayer.url} attribution={tileLayer.attribution} />
+        <TileLayer url={tileLayer.url} attribution={tileLayer.attribution} maxZoom={19} maxNativeZoom={19} />
 
         <MapBoundsFitter
           projects={projects}
