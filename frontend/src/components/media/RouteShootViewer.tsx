@@ -198,35 +198,42 @@ function TrackPlayer({ track, onClose }: TrackPlayerProps) {
                     sx={{
                       width: '100%',
                       flex: 1,
+                      minHeight: 0,
                       objectFit: 'contain',
                       bgcolor: 'black',
                       cursor: 'pointer'
                     }}
                   />
                   {/* Custom seek bar */}
-                  <Box sx={{ px: 2, py: 1, bgcolor: 'grey.900' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ px: 2, py: 1.5, bgcolor: 'grey.800', flexShrink: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                       <IconButton onClick={togglePlayPause} size="small" sx={{ color: 'white' }}>
-                        {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                        {isPlaying ? <Pause size={24} /> : <Play size={24} />}
                       </IconButton>
-                      <Typography variant="caption" sx={{ color: 'grey.400', minWidth: 45 }}>
+                      <Typography variant="body2" sx={{ color: 'grey.300', minWidth: 50, fontFamily: 'monospace' }}>
                         {formatTime(currentTime)}
                       </Typography>
                       <Slider
                         value={currentTime}
                         max={duration || 100}
                         onChange={handleSeek}
-                        size="small"
                         sx={{
                           flex: 1,
                           color: 'primary.main',
                           '& .MuiSlider-thumb': {
-                            width: 12,
-                            height: 12,
+                            width: 16,
+                            height: 16,
+                          },
+                          '& .MuiSlider-track': {
+                            height: 6,
+                          },
+                          '& .MuiSlider-rail': {
+                            height: 6,
+                            bgcolor: 'grey.600',
                           },
                         }}
                       />
-                      <Typography variant="caption" sx={{ color: 'grey.400', minWidth: 45 }}>
+                      <Typography variant="body2" sx={{ color: 'grey.300', minWidth: 50, fontFamily: 'monospace' }}>
                         {formatTime(duration)}
                       </Typography>
                     </Box>

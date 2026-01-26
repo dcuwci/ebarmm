@@ -18,6 +18,7 @@ import com.barmm.ebarmm.data.remote.dto.ProjectResponse
 import com.google.gson.Gson
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import timber.log.Timber
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
@@ -184,21 +185,34 @@ class ProjectDetailViewModel @Inject constructor(
     }
 
     private suspend fun loadGpsTracks(projectId: String): List<GpsTrackInfo> {
+        Timber.d("loadGpsTracks: Starting for project $projectId")
+
         // Fetch from backend and cache to local database
         try {
+            Timber.d("loadGpsTracks: Calling API...")
             val response = gpsTrackApi.getProjectGpsTracks(projectId)
+            Timber.d("loadGpsTracks: API response code=${response.code()}, isSuccessful=${response.isSuccessful}")
+
             if (response.isSuccessful && response.body() != null) {
-                response.body()!!.forEach { serverTrack ->
+                val serverTracks = response.body()!!
+                Timber.d("loadGpsTracks: Got ${serverTracks.size} tracks from server")
+                serverTracks.forEach { serverTrack ->
+                    Timber.d("loadGpsTracks: Caching track ${serverTrack.trackId} - ${serverTrack.trackName}")
                     cacheGpsTrackFromServer(serverTrack)
                 }
+            } else {
+                Timber.w("loadGpsTracks: API failed - code=${response.code()}, error=${response.errorBody()?.string()}")
             }
         } catch (e: Exception) {
-            // Backend fetch failed, continue with local tracks
+            Timber.e(e, "loadGpsTracks: Exception fetching from server")
         }
 
         // Load all tracks from local database (includes both local and cached server tracks)
         return try {
-            gpsTrackDao.getTracksByProjectOnce(projectId).map { track ->
+            val localTracks = gpsTrackDao.getTracksByProjectOnce(projectId)
+            Timber.d("loadGpsTracks: Found ${localTracks.size} tracks in local database")
+            localTracks.map { track ->
+                Timber.d("loadGpsTracks: Local track ${track.trackId}, serverId=${track.serverId}, name=${track.trackName}")
                 GpsTrackInfo(
                     trackId = track.trackId,  // Always use local trackId
                     trackName = track.trackName,
@@ -210,6 +224,7 @@ class ProjectDetailViewModel @Inject constructor(
                 )
             }.sortedByDescending { it.startTime }
         } catch (e: Exception) {
+            Timber.e(e, "loadGpsTracks: Exception loading from local database")
             emptyList()
         }
     }
