@@ -184,57 +184,34 @@ class ProjectDetailViewModel @Inject constructor(
     }
 
     private suspend fun loadGpsTracks(projectId: String): List<GpsTrackInfo> {
-        val tracks = mutableListOf<GpsTrackInfo>()
-        val existingServerIds = mutableSetOf<String>()
-
-        // Fetch from backend first
+        // Fetch from backend and cache to local database
         try {
             val response = gpsTrackApi.getProjectGpsTracks(projectId)
             if (response.isSuccessful && response.body() != null) {
                 response.body()!!.forEach { serverTrack ->
-                    // Cache to local database for offline access
                     cacheGpsTrackFromServer(serverTrack)
-                    existingServerIds.add(serverTrack.trackId)
-
-                    tracks.add(
-                        GpsTrackInfo(
-                            trackId = serverTrack.trackId,
-                            trackName = serverTrack.trackName,
-                            waypointCount = serverTrack.waypointCount,
-                            totalDistanceMeters = serverTrack.totalDistanceMeters,
-                            startTime = parseIsoDate(serverTrack.startTime),
-                            endTime = serverTrack.endTime?.let { parseIsoDate(it) },
-                            isLocal = false
-                        )
-                    )
                 }
             }
         } catch (e: Exception) {
             // Backend fetch failed, continue with local tracks
         }
 
-        // Add local tracks not yet synced (no serverId or serverId not in existing list)
-        try {
-            gpsTrackDao.getTracksByProjectOnce(projectId).forEach { track ->
-                if (track.serverId == null || track.serverId !in existingServerIds) {
-                    tracks.add(
-                        GpsTrackInfo(
-                            trackId = track.trackId,
-                            trackName = track.trackName,
-                            waypointCount = track.waypointCount,
-                            totalDistanceMeters = track.totalDistanceMeters,
-                            startTime = track.startTime,
-                            endTime = track.endTime,
-                            isLocal = track.serverId == null
-                        )
-                    )
-                }
-            }
+        // Load all tracks from local database (includes both local and cached server tracks)
+        return try {
+            gpsTrackDao.getTracksByProjectOnce(projectId).map { track ->
+                GpsTrackInfo(
+                    trackId = track.trackId,  // Always use local trackId
+                    trackName = track.trackName,
+                    waypointCount = track.waypointCount,
+                    totalDistanceMeters = track.totalDistanceMeters,
+                    startTime = track.startTime,
+                    endTime = track.endTime,
+                    isLocal = track.serverId == null
+                )
+            }.sortedByDescending { it.startTime }
         } catch (e: Exception) {
-            // Local fetch failed, continue with what we have
+            emptyList()
         }
-
-        return tracks.sortedByDescending { it.startTime }
     }
 
     private suspend fun cacheGpsTrackFromServer(serverTrack: GpsTrackResponse) {

@@ -393,9 +393,9 @@ private fun OsmMapView(
         MapView(context).apply {
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
-            controller.setZoom(8.0)
-            // Center on BARMM region
-            controller.setCenter(GeoPoint(6.9214, 124.2452))
+            controller.setZoom(5.5)
+            // Center on Philippines
+            controller.setCenter(GeoPoint(12.8797, 121.7740))
         }
     }
 
