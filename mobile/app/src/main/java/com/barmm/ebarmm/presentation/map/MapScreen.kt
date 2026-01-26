@@ -562,16 +562,12 @@ private fun OsmMapView(
 
                 if (allPoints.isNotEmpty()) {
                     val boundingBox = org.osmdroid.util.BoundingBox.fromGeoPoints(allPoints)
-                    // Add padding (10% on each side)
-                    val latSpan = boundingBox.latNorth - boundingBox.latSouth
-                    val lonSpan = boundingBox.lonEast - boundingBox.lonWest
-                    val paddedBox = org.osmdroid.util.BoundingBox(
-                        boundingBox.latNorth + latSpan * 0.1,
-                        boundingBox.lonEast + lonSpan * 0.1,
-                        boundingBox.latSouth - latSpan * 0.1,
-                        boundingBox.lonWest - lonSpan * 0.1
-                    )
-                    map.zoomToBoundingBox(paddedBox, false)
+                    // Use built-in padding (50 pixels on each side)
+                    map.zoomToBoundingBox(boundingBox, false, 50)
+                    // Ensure minimum zoom level of 6 to prevent world map duplication
+                    if (map.zoomLevelDouble < 6.0) {
+                        map.controller.setZoom(6.0)
+                    }
                     hasInitialZoom = true
                 }
             }
