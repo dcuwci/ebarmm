@@ -4,6 +4,7 @@ import android.Manifest
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.Recorder
 import androidx.camera.video.VideoCapture
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
@@ -53,6 +54,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
@@ -90,9 +92,6 @@ fun RouteShootScreen(
         }
     }
 
-    // Video capture use case
-    var videoCapture by remember { mutableStateOf<VideoCapture<*>?>(null) }
-
     if (!permissions.allPermissionsGranted) {
         // Permission request screen
         Scaffold(
@@ -128,8 +127,26 @@ fun RouteShootScreen(
         return
     }
 
-    // Camera setup
+    // Camera setup - only initialize once
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    var videoCapture by remember { mutableStateOf<VideoCapture<Recorder>?>(null) }
+    var isCameraBound by remember { mutableStateOf(false) }
+
+    // Initialize camera once when permissions are granted
+    DisposableEffect(Unit) {
+        cameraProviderFuture.addListener({
+            try {
+                cameraProvider = cameraProviderFuture.get()
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to get camera provider")
+            }
+        }, ContextCompat.getMainExecutor(context))
+
+        onDispose {
+            cameraProvider?.unbindAll()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -165,26 +182,31 @@ fun RouteShootScreen(
                 },
                 modifier = Modifier.fillMaxSize(),
                 update = { previewView ->
-                    val cameraProvider = cameraProviderFuture.get()
-                    val preview = Preview.Builder().build().also {
-                        it.setSurfaceProvider(previewView.surfaceProvider)
-                    }
+                    // Only bind camera once
+                    val provider = cameraProvider
+                    if (provider != null && !isCameraBound && !uiState.isRecording) {
+                        val preview = Preview.Builder().build().also {
+                            it.setSurfaceProvider(previewView.surfaceProvider)
+                        }
 
-                    val videoCaptureUseCase = viewModel.createVideoCapture()
-                    videoCapture = videoCaptureUseCase
+                        val videoCaptureUseCase = viewModel.createVideoCapture()
+                        videoCapture = videoCaptureUseCase
 
-                    val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                        val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
-                    try {
-                        cameraProvider.unbindAll()
-                        cameraProvider.bindToLifecycle(
-                            lifecycleOwner,
-                            cameraSelector,
-                            preview,
-                            videoCaptureUseCase
-                        )
-                    } catch (e: Exception) {
-                        Timber.e(e, "Camera binding failed")
+                        try {
+                            provider.unbindAll()
+                            provider.bindToLifecycle(
+                                lifecycleOwner,
+                                cameraSelector,
+                                preview,
+                                videoCaptureUseCase
+                            )
+                            isCameraBound = true
+                            Timber.d("Camera bound successfully")
+                        } catch (e: Exception) {
+                            Timber.e(e, "Camera binding failed")
+                        }
                     }
                 }
             )
@@ -228,8 +250,7 @@ fun RouteShootScreen(
                     isRecording = uiState.isRecording,
                     onStartRecording = {
                         videoCapture?.let { vc ->
-                            @Suppress("UNCHECKED_CAST")
-                            viewModel.startRecording(vc as androidx.camera.video.VideoCapture<androidx.camera.video.Recorder>)
+                            viewModel.startRecording(vc)
                         }
                     },
                     onStopRecording = { viewModel.stopRecording() }
