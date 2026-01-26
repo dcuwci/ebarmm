@@ -7,6 +7,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Important Reminders (Read First!)
 
+### Development Workflow Preference
+- **Develop against staging server** instead of running local backend
+- Mobile: Use Android Studio with **staging** build variant (Build → Select Build Variant → staging)
+- Frontend: Update `VITE_API_BASE_URL` to point to staging if needed
+- Backend changes: Push to git → pull on EC2 → `docker compose ... up -d --build backend`
+- No need to run local Docker infrastructure unless testing locally
+
 ### Staging Environment
 - **PostgreSQL runs NATIVELY on EC2**, not in Docker. Only backend, frontend, and Redis run in Docker.
 - **Use `docker compose` (V2)** not `docker-compose` (V1) on staging
