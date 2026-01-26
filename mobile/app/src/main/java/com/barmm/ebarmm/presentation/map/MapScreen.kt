@@ -388,13 +388,14 @@ private fun OsmMapView(
     onPhotoClick: (PhotoMarker) -> Unit
 ) {
     val context = LocalContext.current
+    var hasInitialZoom by remember { mutableStateOf(false) }
 
     val mapView = remember {
         MapView(context).apply {
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
             controller.setZoom(8.0)
-            // Center on BARMM region
+            // Center on BARMM region (default, will be overridden by zoom-to-fit)
             controller.setCenter(GeoPoint(6.9214, 124.2452))
         }
     }
@@ -544,6 +545,35 @@ private fun OsmMapView(
                     }
                 }
                 map.overlays.add(photoMarker)
+            }
+
+            // Zoom to fit all geometries on initial load
+            if (!hasInitialZoom && geometries.isNotEmpty()) {
+                val allPoints = mutableListOf<GeoPoint>()
+
+                geometries.forEach { geometry ->
+                    when (geometry) {
+                        is ProjectGeometry.Point -> allPoints.add(geometry.location)
+                        is ProjectGeometry.Line -> allPoints.addAll(geometry.points)
+                        is ProjectGeometry.MultiLine -> geometry.segments.forEach { allPoints.addAll(it) }
+                        is ProjectGeometry.Polygon -> allPoints.addAll(geometry.points)
+                    }
+                }
+
+                if (allPoints.isNotEmpty()) {
+                    val boundingBox = org.osmdroid.util.BoundingBox.fromGeoPoints(allPoints)
+                    // Add padding (10% on each side)
+                    val latSpan = boundingBox.latNorth - boundingBox.latSouth
+                    val lonSpan = boundingBox.lonEast - boundingBox.lonWest
+                    val paddedBox = org.osmdroid.util.BoundingBox(
+                        boundingBox.latNorth + latSpan * 0.1,
+                        boundingBox.lonEast + lonSpan * 0.1,
+                        boundingBox.latSouth - latSpan * 0.1,
+                        boundingBox.lonWest - lonSpan * 0.1
+                    )
+                    map.zoomToBoundingBox(paddedBox, false)
+                    hasInitialZoom = true
+                }
             }
 
             // Zoom to selected project if any
