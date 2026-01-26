@@ -22,6 +22,7 @@ import ListItemButton from '@mui/material/ListItemButton'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
 import Divider from '@mui/material/Divider'
+import Slider from '@mui/material/Slider'
 import { MapContainer, TileLayer, Polyline, CircleMarker, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import {
@@ -31,6 +32,8 @@ import {
   Clock,
   Navigation,
   Film,
+  Play,
+  Pause,
 } from 'lucide-react'
 import { fetchProjectGpsTracks, formatDistance, formatDuration } from '../../api/gps-tracks'
 import { format } from 'date-fns'
@@ -70,6 +73,8 @@ function TrackPlayer({ track, onClose }: TrackPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [currentWaypointIndex, setCurrentWaypointIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
 
   // Get waypoints array
   const waypoints: GpsWaypoint[] = track.waypoints || []
@@ -94,7 +99,11 @@ function TrackPlayer({ track, onClose }: TrackPlayerProps) {
 
   // Handle video time update
   const handleTimeUpdate = useCallback(() => {
-    if (!videoRef.current || waypoints.length === 0) return
+    if (!videoRef.current) return
+
+    setCurrentTime(videoRef.current.currentTime)
+
+    if (waypoints.length === 0) return
 
     const currentTimeMs = videoRef.current.currentTime * 1000
 
@@ -111,6 +120,39 @@ function TrackPlayer({ track, onClose }: TrackPlayerProps) {
 
     setCurrentWaypointIndex(closestIndex)
   }, [waypoints])
+
+  // Handle duration loaded
+  const handleLoadedMetadata = useCallback(() => {
+    if (videoRef.current) {
+      setDuration(videoRef.current.duration)
+    }
+  }, [])
+
+  // Handle seek bar change
+  const handleSeek = useCallback((_event: Event, newValue: number | number[]) => {
+    if (videoRef.current && typeof newValue === 'number') {
+      videoRef.current.currentTime = newValue
+      setCurrentTime(newValue)
+    }
+  }, [])
+
+  // Toggle play/pause
+  const togglePlayPause = useCallback(() => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause()
+      } else {
+        videoRef.current.play()
+      }
+    }
+  }, [isPlaying])
+
+  // Format time as MM:SS
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
 
   return (
     <Dialog
@@ -143,21 +185,53 @@ function TrackPlayer({ track, onClose }: TrackPlayerProps) {
           <Grid item xs={12} md={6} sx={{ height: { xs: '40%', md: '100%' }, borderRight: 1, borderColor: 'divider' }}>
             <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: 'grey.900' }}>
               {track.video_url ? (
-                <Box
-                  component="video"
-                  ref={videoRef}
-                  src={track.video_url}
-                  controls
-                  onTimeUpdate={handleTimeUpdate}
-                  onPlay={() => setIsPlaying(true)}
-                  onPause={() => setIsPlaying(false)}
-                  sx={{
-                    width: '100%',
-                    flex: 1,
-                    objectFit: 'contain',
-                    bgcolor: 'black'
-                  }}
-                />
+                <>
+                  <Box
+                    component="video"
+                    ref={videoRef}
+                    src={track.video_url}
+                    onTimeUpdate={handleTimeUpdate}
+                    onLoadedMetadata={handleLoadedMetadata}
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onClick={togglePlayPause}
+                    sx={{
+                      width: '100%',
+                      flex: 1,
+                      objectFit: 'contain',
+                      bgcolor: 'black',
+                      cursor: 'pointer'
+                    }}
+                  />
+                  {/* Custom seek bar */}
+                  <Box sx={{ px: 2, py: 1, bgcolor: 'grey.900' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <IconButton onClick={togglePlayPause} size="small" sx={{ color: 'white' }}>
+                        {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                      </IconButton>
+                      <Typography variant="caption" sx={{ color: 'grey.400', minWidth: 45 }}>
+                        {formatTime(currentTime)}
+                      </Typography>
+                      <Slider
+                        value={currentTime}
+                        max={duration || 100}
+                        onChange={handleSeek}
+                        size="small"
+                        sx={{
+                          flex: 1,
+                          color: 'primary.main',
+                          '& .MuiSlider-thumb': {
+                            width: 12,
+                            height: 12,
+                          },
+                        }}
+                      />
+                      <Typography variant="caption" sx={{ color: 'grey.400', minWidth: 45 }}>
+                        {formatTime(duration)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </>
               ) : (
                 <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'grey.500' }}>
                   <Box sx={{ textAlign: 'center' }}>

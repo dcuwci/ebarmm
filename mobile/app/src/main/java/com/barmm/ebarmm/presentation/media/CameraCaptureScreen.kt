@@ -79,7 +79,10 @@ fun CameraCaptureScreen(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Text("Camera permission is required")
+            Text(
+                "Camera permission is required",
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
         }
         return
     }
@@ -90,8 +93,14 @@ fun CameraCaptureScreen(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Location permission is required for geotagged photos")
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    "Location permission is required for geotagged photos",
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(onClick = { locationPermission.launchPermissionRequest() }) {
                     Text("Grant Location Permission")

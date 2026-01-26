@@ -116,7 +116,8 @@ fun RouteShootScreen(
             ) {
                 Text(
                     "RouteShoot requires camera, microphone, and location permissions",
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(onClick = { permissions.launchMultiplePermissionRequest() }) {
