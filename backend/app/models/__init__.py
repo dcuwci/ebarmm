@@ -378,3 +378,35 @@ class PasswordResetToken(Base):
     used = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     used_at = Column(DateTime, nullable=True)
+
+
+# =============================================================================
+# GPS Track Models (RouteShoot)
+# =============================================================================
+
+class GpsTrack(Base):
+    """GPS tracks from RouteShoot recordings"""
+    __tablename__ = "gps_tracks"
+
+    track_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False, index=True)
+    media_id = Column(UUID(as_uuid=True), ForeignKey("media_assets.media_id", ondelete="SET NULL"), nullable=True, index=True)
+    track_name = Column(String(255), nullable=False)
+    waypoints = Column(JSONB, nullable=False)  # Array of {lat, lng, alt, timestamp, videoOffsetMs}
+    waypoint_count = Column(Integer, nullable=False)
+    total_distance_meters = Column(Numeric(12, 2), nullable=True)
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=True)
+    kml_storage_key = Column(Text, nullable=True)  # S3 key for KML file
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    # Relationships
+    project = relationship("Project")
+    media = relationship("MediaAsset")
+    creator = relationship("User")
+
+    __table_args__ = (
+        Index('idx_gps_tracks_project_id', 'project_id'),
+        Index('idx_gps_tracks_media_id', 'media_id'),
+    )

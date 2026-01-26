@@ -30,6 +30,7 @@ import {
   Shield,
   Plus,
   Upload,
+  Route,
 } from 'lucide-react';
 import { Button, LoadingSpinner } from '../../components/mui';
 import { fetchProject } from '../../api/projects';
@@ -42,8 +43,9 @@ import ProjectGISView from '../../components/map/ProjectGISView';
 import MediaGallery from '../../components/media/MediaGallery';
 import MediaUpload from '../../components/media/MediaUpload';
 import ProjectAuditLog from '../../components/audit/ProjectAuditLog';
+import RouteShootViewer from '../../components/media/RouteShootViewer';
 
-type TabId = 'overview' | 'progress' | 'gis' | 'media' | 'audit';
+type TabId = 'overview' | 'progress' | 'gis' | 'media' | 'gpstracks' | 'audit';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -182,6 +184,7 @@ export default function ProjectDetail() {
           <Tab icon={<TrendingUp size={18} />} iconPosition="start" label="Progress" value="progress" />
           <Tab icon={<Map size={18} />} iconPosition="start" label="GIS Data" value="gis" />
           <Tab icon={<Image size={18} />} iconPosition="start" label="Media" value="media" />
+          <Tab icon={<Route size={18} />} iconPosition="start" label="GPS Tracks" value="gpstracks" />
           <Tab icon={<History size={18} />} iconPosition="start" label="Audit Log" value="audit" />
         </Tabs>
       </Box>
@@ -379,6 +382,14 @@ export default function ProjectDetail() {
           )}
 
           <MediaGallery projectId={projectId!} canDelete={canEdit} />
+        </TabPanel>
+
+        {/* GPS Tracks Tab */}
+        <TabPanel value="gpstracks" current={activeTab}>
+          <Typography variant="h6" fontWeight={600} sx={{ mb: 3 }}>
+            GPS Tracks (RouteShoot)
+          </Typography>
+          <RouteShootViewer projectId={projectId!} />
         </TabPanel>
 
         {/* Audit Tab */}

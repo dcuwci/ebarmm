@@ -14,7 +14,7 @@ import logging
 import time
 
 from .core.config import settings
-from .api import auth, projects, progress, gis, media, public, audit, users, groups, access_rights, reports
+from .api import auth, projects, progress, gis, media, public, audit, users, groups, access_rights, reports, gps_tracks
 from .core.database import engine, Base
 
 # Configure logging
@@ -145,6 +145,7 @@ app.include_router(media.router, prefix=f"{API_PREFIX}/media", tags=["Media"])
 app.include_router(public.router, prefix=f"{API_PREFIX}/public", tags=["Public API"])
 app.include_router(audit.router, prefix=f"{API_PREFIX}/audit", tags=["Audit Logs"])
 app.include_router(reports.router, prefix=f"{API_PREFIX}/reports", tags=["Reports"])
+app.include_router(gps_tracks.router, prefix=f"{API_PREFIX}/gps-tracks", tags=["GPS Tracks"])
 
 
 # Startup event

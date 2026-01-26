@@ -286,6 +286,29 @@ CREATE TABLE migration_log (
 );
 
 -- =============================================================================
+-- GPS TRACKS (RouteShoot)
+-- =============================================================================
+
+CREATE TABLE gps_tracks (
+    track_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+    media_id UUID REFERENCES media_assets(media_id) ON DELETE SET NULL,
+    track_name VARCHAR(255) NOT NULL,
+    waypoints JSONB NOT NULL,
+    waypoint_count INTEGER NOT NULL,
+    total_distance_meters NUMERIC(12, 2),
+    start_time TIMESTAMP NOT NULL,
+    end_time TIMESTAMP,
+    kml_storage_key TEXT,
+    created_by UUID NOT NULL REFERENCES users(user_id),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_gps_tracks_project_id ON gps_tracks(project_id);
+CREATE INDEX idx_gps_tracks_media_id ON gps_tracks(media_id);
+CREATE INDEX idx_gps_tracks_created_at ON gps_tracks(created_at);
+
+-- =============================================================================
 -- COMMENTS
 -- =============================================================================
 
@@ -298,6 +321,7 @@ COMMENT ON TABLE media_assets IS 'Photos, videos, and documents linked to projec
 COMMENT ON TABLE audit_logs IS 'System-wide audit trail (immutable)';
 COMMENT ON TABLE geofencing_rules IS 'Spatial validation rules for projects';
 COMMENT ON TABLE alerts IS 'Automated notifications for anomalies';
+COMMENT ON TABLE gps_tracks IS 'GPS tracks from RouteShoot recordings with video synchronization';
 
 COMMENT ON COLUMN project_progress_logs.prev_hash IS 'Hash of previous log entry (blockchain-style chaining)';
 COMMENT ON COLUMN project_progress_logs.record_hash IS 'SHA-256 hash of this entry for tamper detection';

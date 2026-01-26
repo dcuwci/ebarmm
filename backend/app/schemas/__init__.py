@@ -603,6 +603,57 @@ class ReportMetadata(BaseModel):
 
 
 # =============================================================================
+# GPS TRACKS (RouteShoot)
+# =============================================================================
+
+class GpsWaypoint(BaseModel):
+    """Single GPS waypoint"""
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    altitude: Optional[float] = None
+    timestamp: int  # Unix timestamp in milliseconds
+    video_offset_ms: Optional[int] = None  # Offset from video start for sync
+
+
+class GpsTrackCreate(BaseModel):
+    """GPS track creation request"""
+    project_id: UUID
+    media_id: Optional[UUID] = None  # Associated video
+    track_name: str = Field(..., min_length=1, max_length=255)
+    waypoints: List[GpsWaypoint]
+    start_time: datetime
+    end_time: Optional[datetime] = None
+    total_distance_meters: Optional[float] = None
+    kml_storage_key: Optional[str] = None
+
+
+class GpsTrackResponse(BaseModel):
+    """GPS track response"""
+    track_id: UUID
+    project_id: UUID
+    media_id: Optional[UUID]
+    track_name: str
+    waypoints: List[Dict[str, Any]]
+    waypoint_count: int
+    total_distance_meters: Optional[float]
+    start_time: datetime
+    end_time: Optional[datetime]
+    kml_storage_key: Optional[str]
+    video_url: Optional[str] = None  # Presigned URL for associated video
+    created_by: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class GpsTrackListResponse(BaseModel):
+    """Paginated GPS track list"""
+    total: int
+    items: List[GpsTrackResponse]
+
+
+# =============================================================================
 # MODEL REBUILDS (for forward references in Pydantic v2)
 # =============================================================================
 
@@ -613,3 +664,4 @@ UserListResponse.model_rebuild()
 GroupListResponse.model_rebuild()
 AccessRightListResponse.model_rebuild()
 UserPermissionsResponse.model_rebuild()
+GpsTrackListResponse.model_rebuild()
