@@ -286,6 +286,7 @@ function TrackPlayer({ track, onClose }: TrackPlayerProps) {
               {polylinePoints.length > 0 ? (
                 <MapContainer
                   bounds={bounds || undefined}
+                  boundsOptions={{ padding: [30, 30], maxZoom: 16 }}
                   style={{ height: '100%', width: '100%' }}
                   scrollWheelZoom
                   maxZoom={22}
